@@ -5,13 +5,12 @@ from config import *
 
 
 class Packet:
-    hops = 0
-    queue_time = 0
-
     def __init__(self, source, dest, birth):
         self.source = source
         self.dest = dest
         self.birth = birth
+        self.hops = 0
+        self.queue_time = 0
 
     def __repr__(self):
         return "Packet<{}->{}>".format(self.source, self.dest)
@@ -25,10 +24,10 @@ class Event:
         self.from_node = from_node
         self.to_node = to_node
         self.arrive_time = arrive_time
-    
+
     def __lt__(self, other):
         return self.arrive_time < other.arrive_time
-    
+
     def __repr__(self):
         return "Event<{}->{} at {}>".format(self.from_node, self.to_node, self.arrive_time)
 
@@ -48,25 +47,26 @@ class Reward:
 
 
 class Node:
-    queue = []
-    sent = {}
-
-    timeout_failure = 0
-    total_packets = 0
-    total_hops = 0
-    total_route_time = 0
 
     def __init__(self, ID, clock):
         self.ID = ID
         self.clock = clock
+        self.queue = []
+        self.sent = {}
+
+        self.timeout_failure = 0
+        self.total_packets = 0
+        self.total_hops = 0
+        self.total_route_time = 0
 
     def link(self, neibor):
         self.sent[neibor] = []
 
+    def __repr__(self):
+        return "Node<{}, queue: {}, sent: {}>".format(self.ID, self.queue, self.sent)
+
     def receive(self, packet):
         """ receive packet and determine where the packet should be delivered.
-            packet would be sent if the connection to next node is not busy
-            return score, and an event if the packet was sent.
         """
         logging.debug("{}: node {} receives packet {}".format(self.clock, self.ID, packet))
         if packet.dest == self.ID: # when the packet arrives its destination
@@ -81,44 +81,33 @@ class Node:
         packet.choice = choice
         self.queue.append(packet)
         return score
-        # if len(self.sent[choice]) >= BandwidthLimit: # the connection to choice is full
-        #     self.queue.append(packet)
-        #     return score
-        # else:
-        #     return score, self.send(packet, choice)
 
     def send(self):
-        """ send packet to given neibor
-            return an Event with the time when the packet really arrives
+        """ send packet to its chosen neibor
+            return an Event if a packet has been sent, None if not
         """
-        for p in self.queue:
+        i = 0
+        while i < len(self.queue):
+            p = self.queue[i]
             if len(self.sent[p.choice]) < BandwidthLimit:
                 logging.debug("{}: node {} send packet {} to {}".format(self.clock, self.ID, p, p.choice))
-                self.queue.remove(p)
+                self.queue.pop(i)
                 p.queue_time = self.clock - p.start_queue
                 p.trans_time = TransTime # set the transmission delay
                 self.sent[p.choice].append(p)
                 return Event(self.ID, p.choice, self.clock+p.trans_time)
-
-    def try_send(self):
-        """ try_send is only called when one packet is really deliveried
-            in a full connection
-        """
-        for p in self.queue:
-            choice, score = self.agent.choose(self.ID, p.dest)
-            if len(self.sent[choice]) < BandwidthLimit:
-                return score, self.send(p, choice)
-        return
+            else:
+                i += 1
 
 
 class Network:
-    clock = 0
-    nodes = {}
-    links = {}
-    event_queue = []
-    next_packet_time = 0
 
     def __init__(self, file):
+        self.clock = 0
+        self.nodes = {}
+        self.links = {}
+        self.event_queue = []
+        self.next_packet_time = 0
         with open(file, 'r') as f:
             lines = [l.split() for l in f.readlines()]
         for l in lines:
@@ -132,8 +121,12 @@ class Network:
                 self.nodes[dest].link(source)
                 self.links[source].append(dest)
                 self.links[dest].append(source)
-    
+
     def step(self, lambd=Lambda):
+        """ step would compare the time to next Event end with the time to next packet to inject
+            step calls itself recursively if new packet needs to inject before an Event ends.
+            return a Reward
+        """
         if self.next_packet_time == 0:
             p, self.next_packet_time = self.new_packet(lambd)
             self.inject(p)
@@ -152,33 +145,26 @@ class Network:
             self.event_queue.remove(next_event)
             self.next_packet_time -= next_step
             from_node, to_node = next_event.from_node, next_event.to_node
-            try:
-                p = self.nodes[from_node].sent[to_node].pop(0)
-            except IndexError as err:
-                logging.warning("node {} to {} empty sent: {}".format(from_node, to_node, self.nodes[from_node].sent[to_node]))
-                logging.warning(self.event_queue)
-                logging.warning(next_event)
-                raise err
+            print(next_event)
+            print(self.nodes[from_node])
+            p = self.nodes[from_node].sent[to_node].pop(0)
             self.next_packet_time -= next_step
             score = self.nodes[to_node].receive(p)
             # try to send
-            event = self.nodes[from_node].send()
+            event = self.nodes[to_node].send()
             if event is not None:
                 self.event_queue.append(event)
-            # if isinstance(back, tuple) and isinstance(back[1], Event):
-            #     self.event_queue.append(back[1])
-            #     score = back[0]
-            # else:
-            #     score = back
             return Reward(from_node, p.dest, to_node, score, p.queue_time, p.trans_time)
 
     def new_packet(self, lambd):
+        """ return a new packet having random source and destination, the time to send the packet
+            following exponential distribution by given lambd
+        """
         nodes_id = list(self.nodes.keys())
         source = random.choice(nodes_id)
         dest = random.choice(nodes_id)
         while dest == source:
             dest = random.choice(nodes_id)
-
         p = Packet(source, dest, self.clock)
         next_step = random.expovariate(lambd)
         return p, next_step
@@ -190,6 +176,9 @@ class Network:
             self.event_queue.append(event)
 
     def broadcast(self):
+        """ broadcast network's clock to every nodes
+            drop the timeout packets
+        """
         for node in self.nodes.values():
             node.clock = self.clock
             i = 0
@@ -215,11 +204,11 @@ class Network:
             if e < event:
                 event = e
         return event
-    
+
     @property
     def hops(self):
         return {k: self.nodes[k].total_hops for k in self.nodes}
-    
+
     @property
     def packets(self):
         return {k: self.nodes[k].total_packets for k in self.nodes}
@@ -231,7 +220,7 @@ class Network:
     @property
     def timeout_failure(self):
         return {k: self.nodes[k].timeout_failure for k in self.nodes}
-    
+
 
 def print6x6(network):
     print("Time: {}".format(network.clock))
