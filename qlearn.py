@@ -1,12 +1,14 @@
 import math
 import random
 
+from config import LearnRate
+
 class Qlearn:
-    Qtable = {}
-    def __init__(self, links, initQ):
-        for node, neibors in links.items():
+    def __init__(self, network, initQ):
+        self.Qtable = {}
+        for node, neibors in network.links.items():
             self.Qtable[node] = {}
-            for dest_node in links.keys():
+            for dest_node in network.links:
                 if dest_node == node:
                     continue
                 self.Qtable[node][dest_node] = {k: initQ for k in neibors}
@@ -23,7 +25,7 @@ class Qlearn:
         choice = random.choice(min_neibors)
         return choice, min_score
 
-    def learn(self, reward, lr):
+    def learn(self, reward, lr=LearnRate):
         q = reward.queue_time
         t = reward.trans_time
         next_score = reward.score
