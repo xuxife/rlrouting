@@ -1,5 +1,6 @@
 import random
 import logging
+from collections import OrderedDict
 
 from config import *
 
@@ -33,6 +34,13 @@ class Event:
 
 
 class Reward:
+    """ Reward is what Network.step() return.
+        Reward contains 
+            source, dest = where the packet from/destination
+            action = which neibor the last node chose
+            score = the receiving node's evaluation score: min_{a} Q(S_t, a)
+            queue/trans_time = the time cost on queue/transmission on the last node/connection
+    """
     def __init__(self, source, dest, action, score, queue_time, trans_time):
         self.source = source
         self.dest = dest
@@ -47,7 +55,10 @@ class Reward:
 
 
 class Node:
-
+    """ Node can receive and send Packets.
+        Node.queue is where Packets waiting for delivered,
+        Node.sent[neibor] is where Packets already sent to 'neibor' but not arrived.
+    """
     def __init__(self, ID, clock):
         self.ID = ID
         self.clock = clock
@@ -66,8 +77,7 @@ class Node:
         return "Node<{}, queue: {}, sent: {}>".format(self.ID, self.queue, self.sent)
 
     def receive(self, packet):
-        """ receive packet and determine where the packet should be delivered.
-        """
+        """ receive packet and determine where the packet should be delivered. """
         logging.debug("{}: node {} receives packet {}".format(self.clock, self.ID, packet))
         if packet.dest == self.ID: # when the packet arrives its destination
             logging.debug("{}: packet {} reach destination node {}".format(self.clock, packet, self.ID))
@@ -94,18 +104,21 @@ class Node:
                 self.queue.pop(i)
                 p.queue_time = self.clock - p.start_queue
                 p.trans_time = TransTime # set the transmission delay
+                event = Event(self.ID, p.choice, self.clock+p.trans_time)
+                p.event = event
                 self.sent[p.choice].append(p)
-                return Event(self.ID, p.choice, self.clock+p.trans_time)
+                return event
             else:
                 i += 1
 
 
 class Network:
-
+    """ Network simulates packtes routing between connected nodes.
+    """
     def __init__(self, file):
         self.clock = 0
-        self.nodes = {}
-        self.links = {}
+        self.nodes = OrderedDict()
+        self.links = OrderedDict()
         self.event_queue = []
         self.next_packet_time = 0
         with open(file, 'r') as f:
@@ -123,14 +136,14 @@ class Network:
                 self.links[dest].append(source)
 
     def step(self, lambd=Lambda):
-        """ step would compare the time to next Event end with the time to next packet to inject
-            step calls itself recursively if new packet needs to inject before an Event ends.
+        """ step moves the whole network until one packet arrived next node.
             return a Reward
         """
         if self.next_packet_time == 0:
             p, self.next_packet_time = self.new_packet(lambd)
             self.inject(p)
 
+        self.drop_timeout()
         next_event = self.next_event()
         next_step = next_event.arrive_time - self.clock
         if next_step > self.next_packet_time:
@@ -145,9 +158,11 @@ class Network:
             self.event_queue.remove(next_event)
             self.next_packet_time -= next_step
             from_node, to_node = next_event.from_node, next_event.to_node
-            print(next_event)
-            print(self.nodes[from_node])
-            p = self.nodes[from_node].sent[to_node].pop(0)
+            try:
+                p = self.nodes[from_node].sent[to_node].pop(0)
+            except Exception as err:
+                print(next_event)
+                raise err
             self.next_packet_time -= next_step
             score = self.nodes[to_node].receive(p)
             # try to send
@@ -177,10 +192,15 @@ class Network:
 
     def broadcast(self):
         """ broadcast network's clock to every nodes
-            drop the timeout packets
         """
         for node in self.nodes.values():
             node.clock = self.clock
+    
+    def drop_timeout(self):
+        """ drop_timeout would compare the living time of packets in network with config.Timeout,
+            drop the timeouted packets.
+        """
+        for node in self.nodes.values():
             i = 0
             while i < len(node.queue):
                 if node.clock - node.queue[i].birth > Timeout:
@@ -189,13 +209,14 @@ class Network:
                 else:
                     i += 1
             for sent in node.sent.values():
-                i = 0
-                while i < len(sent):
-                    if node.clock - sent[i].birth > Timeout:
+                j = 0
+                while j < len(sent):
+                    if node.clock - sent[j].birth > Timeout:
                         node.timeout_failure += 1
-                        sent.pop(i)
+                        self.event_queue.remove(sent[j].event) # remove corresponding events from event_queue
+                        sent.pop(j)
                     else:
-                        i += 1
+                        j += 1
 
     def next_event(self):
         assert len(self.event_queue) > 0, "no event"
