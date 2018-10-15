@@ -1,13 +1,14 @@
 import math
 import random
+from collections import OrderedDict
 
 from config import LearnRate
 
-class Qlearn:
+class Qroute:
     def __init__(self, network, initQ):
-        self.Qtable = {}
+        self.Qtable = Order
         for node, neibors in network.links.items():
-            self.Qtable[node] = {}
+            self.Qtable[node] = OrderedDict()
             for dest_node in network.links:
                 if dest_node == node:
                     continue

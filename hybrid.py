@@ -1,10 +1,12 @@
 import math
 import random
+from collections import OrderedDict
+
 from config import LearnRate
 
 class HybridQ:
     def __init__(self, network, initQ, initP):
-        self.Qtable, self.Ptable = {}, {}
+        self.Qtable, self.Ptable = OrderedDict(), OrderedDict()
         for node, neibors in network.links.items():
             self.Qtable[node] = {}
             self.Ptable[node] = {}
@@ -23,7 +25,7 @@ class HybridQ:
 
     @property
     def exp_p_score(self, source, dest):
-        return {k: math.exp(v) for k, v in self.Ptable[source][dest].items()}
+        return OrderedDict({k: math.exp(v) for k, v in self.Ptable[source][dest].items()})
     
     def learn(self, reward, lrq=LearnRate, lrp=LearnRate):
         q, t = reward.queue_time, reward.trans_time

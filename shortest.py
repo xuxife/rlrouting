@@ -1,6 +1,6 @@
 class Shortest:
     """ Shortest agent determine the action based on the shortest path distance
-        if multiple actions having the same distance, shortest would choose any one randomly
+        if multiple actions having the same distance, shortest would choose
     """
     def __init__(self, network):
         self.distance = {}
