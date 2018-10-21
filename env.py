@@ -6,8 +6,7 @@ from config import *
 
 
 class Packet:
-    def __init__(self, ID, source, dest, birth):
-        self.ID = ID
+    def __init__(self, source, dest, birth):
         self.source = source
         self.dest = dest
         self.birth = birth
@@ -15,24 +14,23 @@ class Packet:
         self.queue_time = 0
 
     def __repr__(self):
-        return "Packet<{}|{}->{}>".format(self.ID, self.source, self.dest)
+        return "Packet<{}->{}>".format(self.source, self.dest)
 
 
 class Event:
     """ Event records the packet passing through connection
         arrive_time is when the packet would really arrive to_node
     """
-    def __init__(self, from_node, to_node, packet_ID, arrive_time):
+    def __init__(self, from_node, to_node, arrive_time):
         self.from_node = from_node
         self.to_node = to_node
-        self.packet_ID = packet_ID
         self.arrive_time = arrive_time
 
     def __lt__(self, other):
         return self.arrive_time < other.arrive_time
 
     def __repr__(self):
-        return "Event<{}->{} Packet<{}> at {}>".format(self.from_node, self.to_node, self.packet_ID, self.arrive_time)
+        return "Event<{}->{} at {}>".format(self.from_node, self.to_node, self.arrive_time)
 
 
 class Reward:
@@ -193,7 +191,8 @@ class Network:
             self.event_queue.append(event)
 
     def broadcast(self):
-        """ broadcast network's clock to every nodes """
+        """ broadcast network's clock to every nodes
+        """
         for node in self.nodes.values():
             node.clock = self.clock
     
