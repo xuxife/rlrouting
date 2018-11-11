@@ -7,10 +7,10 @@ from config import *
 
 class Packet:
     def __init__(self, source, dest, birth):
-        self.source = source
-        self.dest = dest
-        self.birth = birth
-        self.hops = 0
+        self.source     = source
+        self.dest       = dest
+        self.birth      = birth
+        self.hops       = 0
         self.queue_time = 0
 
     def __repr__(self):
@@ -22,8 +22,8 @@ class Event:
         arrive_time is when the packet would really arrive to_node
     """
     def __init__(self, from_node, to_node, arrive_time):
-        self.from_node = from_node
-        self.to_node = to_node
+        self.from_node   = from_node
+        self.to_node     = to_node
         self.arrive_time = arrive_time
 
     def __lt__(self, other):
@@ -42,9 +42,9 @@ class Reward:
             queue/trans_time = the time cost on queue/transmission on the last node/connection
     """
     def __init__(self, packet, choice, agent_info):
-        self.source = packet.source
-        self.dest = packet.dest
-        self.action = choice
+        self.source     = packet.source
+        self.dest       = packet.dest
+        self.action     = choice
         self.queue_time = packet.queue_time
         self.trans_time = packet.trans_time
         self.agent_info = agent_info # extra information defined by agents
@@ -60,13 +60,13 @@ class Node:
         Node.sent[neibor] is where Packets already sent to 'neibor' but not arrived.
     """
     def __init__(self, ID, clock):
-        self.ID = ID
+        self.ID    = ID
         self.clock = clock
         self.queue = []
-        self.sent = {}
+        self.sent  = {}
 
-        self.total_packets = 0
-        self.total_hops = 0
+        self.total_packets    = 0
+        self.total_hops       = 0
         self.total_route_time = 0
 
     def link(self, neibor):
@@ -80,8 +80,8 @@ class Node:
         logging.debug("{}: node {} receives packet {}".format(self.clock, self.ID, packet))
         if packet.dest == self.ID: # when the packet arrives its destination
             logging.debug("{}: packet {} reach destination node {}".format(self.clock, packet, self.ID))
-            self.total_packets += 1
-            self.total_hops += packet.hops
+            self.total_packets    += 1
+            self.total_hops       += packet.hops
             self.total_route_time += self.clock - packet.birth
             return
         packet.start_queue = self.clock
@@ -100,7 +100,7 @@ class Node:
                 self.queue.pop(i)
                 p.queue_time = self.clock - p.start_queue
                 p.trans_time = TransTime # set the transmission delay
-                p.event = Event(self.ID, choice, self.clock+p.trans_time)
+                p.event      = Event(self.ID, choice, self.clock+p.trans_time)
                 self.sent[choice].append(p)
                 return p.event, Reward(p, choice, self.agent.get_reward(self.ID, p.dest, choice))
             else:
@@ -110,11 +110,11 @@ class Node:
 class Network:
     """ Network simulates packtes routing between connected nodes. """
     def __init__(self, file):
-        self.clock = 0
-        self.nodes = OrderedDict()
-        self.links = OrderedDict()
-        self.event_queue = []
-        self.rewards = []
+        self.clock            = 0
+        self.nodes            = OrderedDict()
+        self.links            = OrderedDict()
+        self.event_queue      = []
+        self.rewards          = []
         self.next_packet_time = 0
         with open(file, 'r') as f:
             lines = [l.split() for l in f.readlines()]
@@ -139,7 +139,7 @@ class Network:
             self.inject(p)
 
         next_event = self.next_event()
-        next_step = next_event.arrive_time - self.clock
+        next_step  = next_event.arrive_time - self.clock
         if duration < min(next_step, self.next_packet_time):
             self.clock += duration
             self.broadcast()
@@ -148,7 +148,7 @@ class Network:
             return rewards
         if self.next_packet_time < next_step:
             self.clock += self.next_packet_time
-            duration -= self.next_packet_time
+            duration   -= self.next_packet_time
             self.broadcast()
             p, self.next_packet_time = self.new_packet(lambd)
             self.inject(p)
@@ -158,7 +158,7 @@ class Network:
             self.broadcast()
             self.event_queue.remove(next_event)
             self.next_packet_time -= next_step
-            duration -= next_step
+            duration              -= next_step
             from_node, to_node = next_event.from_node, next_event.to_node
             p = self.nodes[from_node].sent[to_node].pop(0)
             self.nodes[to_node].receive(p)
@@ -175,11 +175,11 @@ class Network:
             following exponential distribution by given lambd
         """
         nodes_id = list(self.nodes.keys())
-        source = random.choice(nodes_id)
-        dest = random.choice(nodes_id)
+        source   = random.choice(nodes_id)
+        dest     = random.choice(nodes_id)
         while dest == source:
             dest = random.choice(nodes_id)
-        p = Packet(source, dest, self.clock)
+            p    = Packet(source, dest, self.clock)
         next_step = random.expovariate(lambd)
         return p, next_step
 

@@ -15,11 +15,11 @@ class Qroute:
                 self.Qtable[source][dest] = OrderedDict({k: initQ for k in neibors})
     
     def choose(self, source, dest):
-        min_score = math.inf
+        min_score   = math.inf
         min_neibors = []
         for neibor, score in self.Qtable[source][dest].items():
             if score < min_score:
-                min_score = score
+                min_score   = score
                 min_neibors = [neibor]
             elif score == min_score:
                 min_neibors.append(neibor)
