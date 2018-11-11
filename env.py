@@ -41,17 +41,17 @@ class Reward:
             score = the receiving node's evaluation score: min_{a} Q(S_t, a)
             queue/trans_time = the time cost on queue/transmission on the last node/connection
     """
-    def __init__(self, source, dest, action, score, queue_time, trans_time):
-        self.source = source
-        self.dest = dest
-        self.action = action
-        self.score = score
-        self.queue_time = queue_time
-        self.trans_time = trans_time
+    def __init__(self, packet, choice, agent_info):
+        self.source = packet.source
+        self.dest = packet.dest
+        self.action = choice
+        self.queue_time = packet.queue_time
+        self.trans_time = packet.trans_time
+        self.agent_info = agent_info # extra information defined by agents
 
     def __repr__(self):
-        return "Reward<{}->{} by {}|score: {}, queue: {}, trans: {}>".format(
-            self.source, self.dest, self.action, self.score, self.queue_time, self.trans_time)
+        return "Reward<{}->{} by {}|queue: {}, trans: {}>".format(
+            self.source, self.dest, self.action, self.queue_time, self.trans_time)
 
 
 class Node:
