@@ -65,7 +65,6 @@ class Node:
         self.queue = []
         self.sent = {}
 
-        self.timeout_failure = 0
         self.total_packets = 0
         self.total_hops = 0
         self.total_route_time = 0
@@ -113,8 +112,7 @@ class Node:
 
 
 class Network:
-    """ Network simulates packtes routing between connected nodes.
-    """
+    """ Network simulates packtes routing between connected nodes. """
     def __init__(self, file):
         self.clock = 0
         self.nodes = OrderedDict()
@@ -143,7 +141,6 @@ class Network:
             p, self.next_packet_time = self.new_packet(lambd)
             self.inject(p)
 
-        self.drop_timeout()
         next_event = self.next_event()
         next_step = next_event.arrive_time - self.clock
         if next_step > self.next_packet_time:
@@ -191,33 +188,10 @@ class Network:
             self.event_queue.append(event)
 
     def broadcast(self):
-        """ broadcast network's clock to every nodes
-        """
+        """ broadcast network's clock to every nodes """
         for node in self.nodes.values():
             node.clock = self.clock
     
-    def drop_timeout(self):
-        """ drop_timeout would compare the living time of packets in network with config.Timeout,
-            drop the timeouted packets.
-        """
-        for node in self.nodes.values():
-            i = 0
-            while i < len(node.queue):
-                if node.clock - node.queue[i].birth > Timeout:
-                    node.timeout_failure += 1
-                    node.queue.pop(i)
-                else:
-                    i += 1
-            for sent in node.sent.values():
-                j = 0
-                while j < len(sent):
-                    if node.clock - sent[j].birth > Timeout:
-                        node.timeout_failure += 1
-                        self.event_queue.remove(sent[j].event) # remove corresponding events from event_queue
-                        sent.pop(j)
-                    else:
-                        j += 1
-
     def next_event(self):
         assert len(self.event_queue) > 0, "no event"
         event = self.event_queue[0]
@@ -237,10 +211,6 @@ class Network:
     @property
     def route_time(self):
         return {k: self.nodes[k].total_route_time for k in self.nodes}
-
-    @property
-    def timeout_failure(self):
-        return {k: self.nodes[k].timeout_failure for k in self.nodes}
 
 
 def print6x6(network):
