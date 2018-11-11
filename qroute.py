@@ -24,12 +24,11 @@ class Qroute:
             elif score == max_score:
                 max_neibors.append(neibor)
         choice = random.choice(max_neibors)
-        return choice, max_score
+        return choice
 
     def get_reward(self, source, dest, action):
         agent_info = {}
-        _, action_max = self.choose(action, dest)
-        agent_info['action_max'] = action_max
+        agent_info['action_max'] = max(self.Qtable[source][dest].values())
         return agent_info
 
     def learn(self, reward, lr=LearnRateQ):

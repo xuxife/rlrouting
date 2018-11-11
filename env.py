@@ -94,7 +94,7 @@ class Node:
         i = 0
         while i < len(self.queue):
             p = self.queue[i]
-            choice, _ = self.agent.choose(self.ID, p.dest)
+            choice = self.agent.choose(self.ID, p.dest)
             if len(self.sent[choice]) < BandwidthLimit:
                 logging.debug("{}: node {} send packet {} to {}".format(self.clock, self.ID, p, choice))
                 self.queue.pop(i)
@@ -130,8 +130,9 @@ class Network:
                 self.links[source].append(dest)
                 self.links[dest].append(source)
 
-    def step(self, duration, lambd=Lambda):
+    def step(self, timeslot=TimeSlot, lambd=Lambda):
         """ step runs the whole network forward for given duration
+            lambd is the parameter of packets generating (Poisson)
             return a list of rewards backwarded in thie period
         """
         if self.next_packet_time == 0:

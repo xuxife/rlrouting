@@ -21,7 +21,7 @@ class HybridQ:
         """
         population, weight = zip(*[(k, v) for k, v in self.exp_theta(source, dest).items()])
         choice = random.choices(population, weight)[0]
-        return choice, self.Qtable[source][dest][choice]
+        return choice
 
     def exp_theta(self, source, dest):
         return OrderedDict({k: math.exp(v) for k, v in self.Theta[source][dest].items()})

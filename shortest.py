@@ -29,7 +29,7 @@ class Shortest:
     def choose(self, source, dest):
         """ return the action with shortest distance and the distance
         """
-        return self.choice[source][dest], self.distance[source][dest]
+        return self.choice[source][dest]
     
     def learn(self, reward):
         return
