@@ -15,28 +15,26 @@ class Qroute:
                 self.Qtable[source][dest] = OrderedDict({k: initQ for k in neibors})
     
     def choose(self, source, dest):
-        min_score   = math.inf
-        min_neibors = []
+        max_score   = math.inf
+        max_neibors = []
         for neibor, score in self.Qtable[source][dest].items():
-            if score < min_score:
-                min_score   = score
-                min_neibors = [neibor]
-            elif score == min_score:
-                min_neibors.append(neibor)
-        choice = random.choice(min_neibors)
-        return choice, min_score
+            if score < max_score:
+                max_score   = score
+                max_neibors = [neibor]
+            elif score == max_score:
+                max_neibors.append(neibor)
+        choice = random.choice(max_neibors)
+        return choice, max_score
 
     def get_reward(self, source, dest, action):
         agent_info = {}
-        _, next_min_score = self.choose(action, dest)
-        agent_info['next_min'] = next_min_score
+        _, action_max = self.choose(action, dest)
+        agent_info['action_max'] = action_max
         return agent_info
 
     def learn(self, reward, lr=LearnRateQ):
-        q = reward.queue_time
-        t = reward.trans_time
+        q, t = reward.queue_time, reward.trans_time
         source, dest, action = reward.source, reward.dest, reward.action
-        # _, next_score = self.choose(reward.action, reward.dest)
-        next_min_score = reward.agent_info['next_min']
+        action_max = reward.agent_info['action_max']
         old_score = self.Qtable[source][dest][action]
-        self.Qtable[source][dest][action] += lr*(q+t+next_min_score-old_score)
+        self.Qtable[source][dest][action] += lr*(-q-t + action_max - old_score)

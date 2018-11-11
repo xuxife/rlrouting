@@ -179,7 +179,7 @@ class Network:
         dest     = random.choice(nodes_id)
         while dest == source:
             dest = random.choice(nodes_id)
-            p    = Packet(source, dest, self.clock)
+        p = Packet(source, dest, self.clock)
         next_step = random.expovariate(lambd)
         return p, next_step
 
