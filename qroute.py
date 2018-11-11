@@ -2,17 +2,17 @@ import math
 import random
 from collections import OrderedDict
 
-from config import LearnRate
+from config import LearnRateQ
 
 class Qroute:
     def __init__(self, network, initQ):
-        self.Qtable = Order
-        for node, neibors in network.links.items():
-            self.Qtable[node] = OrderedDict()
-            for dest_node in network.links:
-                if dest_node == node:
+        self.Qtable = {}
+        for source, neibors in network.links.items():
+            self.Qtable[source] = {}
+            for dest in network.links:
+                if dest == source:
                     continue
-                self.Qtable[node][dest_node] = {k: initQ for k in neibors}
+                self.Qtable[source][dest] = OrderedDict({k: initQ for k in neibors})
     
     def choose(self, source, dest):
         min_score = math.inf
@@ -26,9 +26,17 @@ class Qroute:
         choice = random.choice(min_neibors)
         return choice, min_score
 
-    def learn(self, reward, lr=LearnRate):
+    def get_reward(self, source, dest, action):
+        agent_info = {}
+        _, next_min_score = self.choose(action, dest)
+        agent_info['next_min'] = next_min_score
+        return agent_info
+
+    def learn(self, reward, lr=LearnRateQ):
         q = reward.queue_time
         t = reward.trans_time
-        next_score = reward.score
-        old_score = self.Qtable[reward.source][reward.dest][reward.action]
-        self.Qtable[reward.source][reward.dest][reward.action] += lr*(q+t+next_score-old_score)
+        source, dest, action = reward.source, reward.dest, reward.action
+        # _, next_score = self.choose(reward.action, reward.dest)
+        next_min_score = reward.agent_info['next_min']
+        old_score = self.Qtable[source][dest][action]
+        self.Qtable[source][dest][action] += lr*(q+t+next_min_score-old_score)

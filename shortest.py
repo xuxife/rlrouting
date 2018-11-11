@@ -33,3 +33,6 @@ class Shortest:
     
     def learn(self, reward):
         return
+
+    def get_reward(self, source, dest, action):
+        return
