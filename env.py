@@ -172,17 +172,18 @@ class Network:
             return self.step(duration, lambd)
 
     def new_packet(self, lambd):
-        """ return a new packet having random source and destination, the time to send the packet
-            following exponential distribution by given lambd
+        """ return new packets having random source and destination following a Poisson with lambd
         """
+        size     = np.random.poisson(lambd)
+        packets  = []
         nodes_id = list(self.nodes.keys())
-        source   = random.choice(nodes_id)
-        dest     = random.choice(nodes_id)
-        while dest == source:
-            dest = random.choice(nodes_id)
-        p = Packet(source, dest, self.clock)
-        next_step = random.expovariate(lambd)
-        return p, next_step
+        for _ in range(size):
+            source = np.random.choice(nodes_id)
+            dest   = np.random.choice(nodes_id)
+            while dest == source:
+                dest = np.random.choice(nodes_id)
+            packets.append(Packet(source, dest, self.clock))
+        return packets
 
     def inject(self, packet):
         self.nodes[packet.source].receive(packet)
