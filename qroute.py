@@ -2,10 +2,10 @@ import math
 import random
 from collections import OrderedDict
 
-from config import LearnRateQ
+from config import *
 
 class Qroute:
-    def __init__(self, network, initQ):
+    def __init__(self, network, initQ=InitQ):
         self.Qtable = {}
         for source, neibors in network.links.items():
             self.Qtable[source] = {}

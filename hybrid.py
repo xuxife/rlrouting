@@ -2,10 +2,10 @@ import math
 import random
 from collections import OrderedDict
 
-from config import LearnRateQ, LearnRateP
+from config import *
 
 class HybridQ:
-    def __init__(self, network, initQ, initP):
+    def __init__(self, network, initQ=InitQ, initP=InitP):
         self.Qtable, self.Theta = {}, {}
         for source, neibors in network.links.items():
             self.Qtable[source] = {}
