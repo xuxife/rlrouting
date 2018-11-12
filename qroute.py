@@ -31,9 +31,10 @@ class Qroute:
         agent_info['action_max'] = max(self.Qtable[source][dest].values())
         return agent_info
 
-    def learn(self, reward, lr=LearnRateQ):
-        q, t = reward.queue_time, reward.trans_time
-        source, dest, action = reward.source, reward.dest, reward.action
-        action_max = reward.agent_info['action_max']
-        old_score = self.Qtable[source][dest][action]
-        self.Qtable[source][dest][action] += lr*(-q-t + action_max - old_score)
+    def learn(self, reward_list, lr=LearnRateQ):
+        for reward in reward_list:
+            q, t = reward.queue_time, reward.trans_time
+            source, dest, action = reward.source, reward.dest, reward.action
+            action_max = reward.agent_info['action_max']
+            old_score = self.Qtable[source][dest][action]
+            self.Qtable[source][dest][action] += lr*(-q-t + action_max - old_score)

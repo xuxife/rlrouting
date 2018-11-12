@@ -32,15 +32,16 @@ class HybridQ:
         agent_info['source_max'] = max(self.Qtable[source][dest].values())
         return agent_info
 
-    def learn(self, reward, lrq=LearnRateQ, lrp=LearnRateP):
-        q, t = reward.queue_time, reward.trans_time
-        source, dest, action = reward.source, reward.dest, reward.action
-        action_max = reward.agent_info['action_max']
-        source_max = reward.agent_info['source_max']
-        old_Q_score = self.Qtable[source][dest][action]
-        self.Qtable[source][dest][action] += lrq * (-q-t + action_max - old_Q_score)
-        for neibor in self.Theta[source][dest]:
-            self.Theta[source][dest][neibor] += lrp * (-q-t + action_max - source_max) * self.gradient(source, dest, action, neibor)
+    def learn(self, reward_list, lrq=LearnRateQ, lrp=LearnRateP):
+        for reward in reward_list:
+            q, t = reward.queue_time, reward.trans_time
+            source, dest, action = reward.source, reward.dest, reward.action
+            action_max = reward.agent_info['action_max']
+            source_max = reward.agent_info['source_max']
+            old_Q_score = self.Qtable[source][dest][action]
+            self.Qtable[source][dest][action] += lrq * (-q-t + action_max - old_Q_score)
+            for neibor in self.Theta[source][dest]:
+                self.Theta[source][dest][neibor] += lrp * (-q-t + action_max - source_max) * self.gradient(source, dest, action, neibor)
 
     def gradient(self, source, dest, action, theta):
         exp_theta = self.exp_theta(souce, dest)
