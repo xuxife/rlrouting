@@ -17,6 +17,7 @@ class Packet:
         start_queue (int, time): When the queuing started.
         queue_time/trans_time (int, time): Queuing time/Transportation time.
         hops (int): The number of hop (one hop is a jump from node to node).
+        route_time (int, time): The duration from birth to end.
     """
     def __init__(self, source, dest, birth):
         self.source = source
@@ -27,7 +28,9 @@ class Packet:
         self.start_queue = 0
         self.queue_time  = 0
         self.trans_time  = 0
-        self.hops        = 0
+
+        self.hops       = 0
+        self.route_time = 0
 
     def __repr__(self):
         return "Packet<{}->{}>".format(self.source, self.dest)
@@ -81,9 +84,7 @@ class Node:
         queue (list): Where Packets waiting for being delivered,
         sent  (dict): An pesudo stage where Packets already sent but not arrive the next node.
 
-        total_packets    (int) : The number of packets ends in this node.
-        total_hops       (list): The number of hops of every packet ends in this node.
-        total_route_time (list): The duration of every packet ends in this node.
+        end_packets (list): All packets end in this node.
     """
     def __init__(self, ID, clock):
         self.ID    = ID
@@ -91,9 +92,7 @@ class Node:
         self.queue = []
         self.sent  = {}
 
-        self.total_packets    = 0
-        self.total_hops       = []
-        self.total_route_time = []
+        self.end_packets  = []
 
     def link(self, neibor):
         self.sent[neibor] = []
@@ -108,9 +107,8 @@ class Node:
         logging.debug("{}: Node {} receives {}".format(self.clock, self.ID, packet))
         if packet.dest == self.ID: # when the packet arrives its destination
             logging.debug("{}: {} reachs destination Node {}".format(self.clock, packet, self.ID))
-            self.total_packets += 1
-            self.total_hops.append(packet.hops)
-            self.total_route_time.append(self.clock - packet.birth)
+            packet.route_time = self.clock - packet.birth
+            self.end_packets.append(packet)
         else:
             packet.start_queue = self.clock
             self.queue.append(packet)
@@ -152,6 +150,9 @@ class Network:
 
         event_queue (list): A queue of following happen events.
         rewards     (list): A list of rewards after call step function.
+
+        active_packets (list): The packets are still active in the network.
+        end_packets    (list): The packets already ends in its destination.
     """
     def __init__(self, file):
         self.clock       = 0
@@ -160,9 +161,12 @@ class Network:
         self.event_queue = []
         self.rewards     = []
 
+        self.active_packets = []
+        self.end_packets    = []
+
         self.read_network(file)
 
-    def read_network(self. file):
+    def read_network(self, file):
         with open(file, 'r') as f:
             lines = [l.split() for l in f.readlines()]
         for l in lines:
@@ -205,6 +209,7 @@ class Network:
                 self.broadcast()
                 rewards = self.rewards
                 self.rewards = []
+                self.check_end()
                 return rewards
             else:
                 next_step   = next_event.arrive_time - self.clock
@@ -237,7 +242,17 @@ class Network:
 
     def inject(self, packet):
         """ Injects the packet into network """
+        self.active_packets.append(packet)
         self.nodes[packet.source].receive(packet)
+
+    def check_end(self):
+        """ Scan the ended packets in all nodes, remove them from active nodes. """
+        self.end_packets = []
+        for node in self.nodes.values():
+            self.end_packets.append(node.end_packets)
+        for p in self.end_packets:
+            if p in self.active_packets:
+                self.active_packets.remove(p)
 
     def broadcast(self):
         """ Broadcast the network clock to nodes """
@@ -258,15 +273,15 @@ class Network:
 
     @property
     def hops(self):
-        return {k: self.nodes[k].total_hops for k in self.nodes}
+        return sum([node.arrived_packets.hops for node in self.nodes.values()])
 
     @property
     def packets(self):
-        return {k: self.nodes[k].total_packets for k in self.nodes}
+        return sum([len(node.arrived_packets) for node in self.nodes.values()])
 
     @property
     def route_time(self):
-        return {k: self.nodes[k].total_route_time for k in self.nodes}
+        return sum([node.arrived_packets.route_time for node in self.nodes.values()])
 
 
 def print6x6(network):
