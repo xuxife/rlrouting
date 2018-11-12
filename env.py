@@ -19,9 +19,9 @@ class Packet:
         hops (int): The number of hop (one hop is a jump from node to node).
     """
     def __init__(self, source, dest, birth):
-        self.source     = source
-        self.dest       = dest
-        self.birth      = birth
+        self.source = source
+        self.dest   = dest
+        self.birth  = birth
 
         self.event       = None
         self.start_queue = 0
@@ -154,12 +154,15 @@ class Network:
         rewards     (list): A list of rewards after call step function.
     """
     def __init__(self, file):
-        self.clock            = 0
-        self.nodes            = OrderedDict()
-        self.links            = OrderedDict()
-        self.event_queue      = []
-        self.rewards          = []
+        self.clock       = 0
+        self.nodes       = OrderedDict()
+        self.links       = OrderedDict()
+        self.event_queue = []
+        self.rewards     = []
 
+        self.read_network(file)
+
+    def read_network(self. file):
         with open(file, 'r') as f:
             lines = [l.split() for l in f.readlines()]
         for l in lines:
