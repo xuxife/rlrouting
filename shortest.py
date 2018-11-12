@@ -1,7 +1,5 @@
 class Shortest:
-    """ Shortest agent determine the action based on the shortest path distance
-        if multiple actions having the same distance, shortest would choose
-    """
+    """ Shortest agent determine the action based on the shortest path distance. """
     def __init__(self, network):
         self.distance = {}
         self.choice = {}
@@ -27,8 +25,7 @@ class Shortest:
                             changing = True
 
     def choose(self, source, dest):
-        """ return the action with shortest distance and the distance
-        """
+        """ Return the action with shortest distance and the distance """
         return self.choice[source][dest]
     
     def learn(self, reward):

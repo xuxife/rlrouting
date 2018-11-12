@@ -1,5 +1,5 @@
 import math
-import random
+import numpy as np
 from collections import OrderedDict
 
 from config import *
@@ -20,7 +20,7 @@ class HybridQ:
         """ choose returns the choice following weighted random sample, and the Q score of the choice
         """
         population, weight = zip(*[(k, v) for k, v in self.exp_theta(source, dest).items()])
-        choice = random.choices(population, weight)[0]
+        choice = np.random.choice(population, p=weight)
         return choice
 
     def exp_theta(self, source, dest):
