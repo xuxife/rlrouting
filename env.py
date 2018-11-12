@@ -174,46 +174,44 @@ class Network:
                 self.links[source].append(dest)
                 self.links[dest].append(source)
 
-    def step(self, timeslot=TimeSlot, lambd=Lambda):
-        """ step runs the whole network forward for given duration
-            lambd is the parameter of packets generating (Poisson)
-            return a list of rewards backwarded in thie period
+    def step(self, duration=TimeSlot, lambd=Lambda):
+        """ step runs the whole network forward.
+
+        Args:
+            duration (int, duration): The duration of one step.
+            lambd    (int, float)   : The Poisson parameter (lambda) of this step.
+
+        Returns:
+            list: A list of rewards from sending events happended in the timeslot.
         """
-        if self.next_packet_time == 0:
-            p, self.next_packet_time = self.new_packet(lambd)
+        packets = self.new_packet(lambd)
+        for p in packets:
             self.inject(p)
 
-        next_event = self.next_event()
-        next_step  = next_event.arrive_time - self.clock
-        if duration < min(next_step, self.next_packet_time):
-            self.clock += duration
-            self.broadcast()
-            rewards = self.rewards
-            self.rewards = []
-            return rewards
-        if self.next_packet_time < next_step:
-            self.clock += self.next_packet_time
-            duration   -= self.next_packet_time
-            self.broadcast()
-            p, self.next_packet_time = self.new_packet(lambd)
-            self.inject(p)
-            return self.step(duration, lambd)
-        else: # one of sending packets really arrives
-            self.clock += next_step
-            self.broadcast()
-            self.event_queue.remove(next_event)
-            self.next_packet_time -= next_step
-            duration              -= next_step
-            from_node, to_node = next_event.from_node, next_event.to_node
-            p = self.nodes[from_node].sent[to_node].pop(0)
-            self.nodes[to_node].receive(p)
-            # try to send
-            event_reward = self.nodes[to_node].send()
-            if isinstance(event_reward, tuple):
-                event, reward = event_reward
+        self.broadcast()
+        for node in self.nodes.values():
+            event, reward = node.send()
+            if event is not None and reward is not None:
                 self.event_queue.append(event)
                 self.rewards.append(reward)
-            return self.step(duration, lambd)
+
+        while duration >= 0:
+            next_event = self.next_event()
+            if next_event is None or duration < next_event.arrive_time - self.clock:
+                self.clock += duration
+                self.broadcast()
+                rewards = self.rewards
+                self.rewards = []
+                return rewards
+            else:
+                next_step   = next_event.arrive_time - self.clock
+                duration   -= next_step
+                self.clock += next_step
+                self.broadcast()
+                self.event_queue.remove(next_event)
+                p = next_event.packet
+                self.nodes[next_event.from_node].sent[next_event.to_node].remove(p)
+                self.nodes[next_event.to_node].receive(p)
 
     def new_packet(self, lambd):
         """ Generates new packets following Poisson(lambd).
