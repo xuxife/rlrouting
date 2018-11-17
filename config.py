@@ -1,9 +1,9 @@
 InitQ          = 0    # inital value of Q table
 InitP          = 0
-Lambda         = 10   # packets per second
-Timeout        = 0.5  # packets living over Timeout would be drop
-Discount       = 0.8  # discount factor
+Lambda         = 10   # packets per TimeSlot
+Discount       = 0.99 # discount factor
 DiscountTrace  = 0.9  # discount factor of eligibity trace
+TimeSlot       = 0.1  # th eduratoin of one time slot
 TransTime      = 0.1  # transmission delay
 LearnRateQ     = 0.1
 LearnRateP     = 0.1

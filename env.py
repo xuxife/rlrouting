@@ -20,9 +20,10 @@ class Packet:
         route_time (int, time): The duration from birth to end.
     """
     def __init__(self, source, dest, birth):
-        self.source = source
-        self.dest   = dest
-        self.birth  = birth
+        self.source  = source
+        self.dest    = dest
+        self.current = source
+        self.birth   = birth
 
         self.event       = None
         self.start_queue = 0
@@ -64,8 +65,8 @@ class Reward:
         queue/trans_time (int, time): The time cost on queue/transmission on the last node/connection
         agent_info (:obj:): Extra information from agent.get_reward
     """
-    def __init__(self, packet, choice, agent_info):
-        self.source     = packet.source
+    def __init__(self, source, packet, choice, agent_info):
+        self.source     = source
         self.dest       = packet.dest
         self.action     = choice
         self.queue_time = packet.queue_time
@@ -105,6 +106,7 @@ class Node:
         Update statistic attritubes if this packet ends here, else append the packet into queue.
         """
         logging.debug("{}: Node {} receives {}".format(self.clock, self.ID, packet))
+        packet.current = self.ID
         if packet.dest == self.ID: # when the packet arrives its destination
             logging.debug("{}: {} reachs destination Node {}".format(self.clock, packet, self.ID))
             packet.route_time = self.clock - packet.birth
@@ -133,7 +135,7 @@ class Node:
                 p.event       = Event(p, self.ID, choice, self.clock+p.trans_time)
                 p.hops       += 1
                 self.sent[choice].append(p)
-                return p.event, Reward(p, choice, self.agent.get_reward(self.ID, p.dest, choice))
+                return p.event, Reward(self.ID, p, choice, self.agent.get_reward(self.ID, p.dest, choice))
         return None, None
 
 
@@ -249,7 +251,7 @@ class Network:
         """ Scan the ended packets in all nodes, remove them from active nodes. """
         self.end_packets = []
         for node in self.nodes.values():
-            self.end_packets.append(node.end_packets)
+            self.end_packets += node.end_packets
         for p in self.end_packets:
             if p in self.active_packets:
                 self.active_packets.remove(p)
@@ -271,17 +273,32 @@ class Network:
             return event
         return None
 
-    @property
-    def hops(self):
-        return sum([node.arrived_packets.hops for node in self.nodes.values()])
+    def ave_hops(self, method="end"):
+        """ ave_hops return the average hops of packets, 
+            Three methods are provided:
 
-    @property
-    def packets(self):
-        return sum([len(node.arrived_packets) for node in self.nodes.values()])
+                "end"   : return the average hops of packets already ended at its destination.
+                "active": return the average hops of active packets in the network.
+                "all"   : return the average hops of all packets (active+end).
+        """
+        if method == "end":
+            if len(self.end_packets) > 0:
+                return np.mean([packet.hops for packet in self.end_packets])
+            return 0
+        elif method == "active":
+            if len(self.active_packets) > 0:
+                return np.mean([packet.hops for packet in self.active_packets])
+            return 0
+        elif method == "all":
+            if len(self.active_packets) > 0:
+                return np.mean([packet.hops for packet in self.active_packets+self.end_packets])
+            return 0
 
-    @property
-    def route_time(self):
-        return sum([node.arrived_packets.route_time for node in self.nodes.values()])
+
+    def ave_route_time(self):
+        if len(self.end_packets) > 0:
+            return np.mean([packet.route_time for packet in self.end_packets])
+        return 0
 
 
 def print6x6(network):
