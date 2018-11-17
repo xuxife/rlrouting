@@ -1,24 +1,26 @@
 import logging
-import random
+import numpy as np
 
 from env import *
 from config import *
 from shortest import Shortest
-from qlearn import Qlearn
+from qroute import Qroute
 from hybrid import HybridQ
+from multi_agent import MaHybridQ
 
-File = "6x6.net"
 Duration = 1
-
+np.random.seed(1)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
-random.seed()
 
-nw = Network(File)
+File = "6x6.net"
+nw   = Network(File)
 
 # =============
 # agent = Shortest(nw)
-agent = Qlearn(nw, 1)
+agent = Qroute(nw)
+# agent = HybridQ(nw)
+# agent = MaHybridQ(nw)
 # =============
 
 for node in nw.nodes.values():
