@@ -1,10 +1,10 @@
 InitQ          = 0    # inital value of Q table
 InitP          = 0
-Lambda         = 10   # packets per TimeSlot
+Lambda         = 2   # packets per TimeSlot
 Discount       = 0.99 # discount factor
 DiscountTrace  = 0.9  # discount factor of eligibity trace
-TimeSlot       = 0.1  # th eduratoin of one time slot
-TransTime      = 0.1  # transmission delay
+TimeSlot       = 1  # th eduratoin of one time slot
+TransTime      = 1  # transmission delay
 LearnRateQ     = 0.1
 LearnRateP     = 0.1
 BandwidthLimit = 3    # the maximum capacity of a connection
