@@ -1,36 +1,34 @@
 import math
+import pickle
 import numpy as np
-from collections import OrderedDict
 
 from config import *
 
+
 class HybridQ:
     def __init__(self, network, initQ=InitQ, initP=InitP):
-        self.Qtable, self.Theta = {}, {}
-        for source, neibors in network.links.items():
-            self.Qtable[source] = {}
-            self.Theta [source] = {}
-            for dest in network.links:
-                if dest == source:
-                    continue
-                self.Qtable[source][dest] = OrderedDict({k: initQ for k in neibors})
-                self.Theta [source][dest] = OrderedDict({k: initP for k in neibors})
-    
+        self.nw, self.links = network, network.links
+        node_num = len(self.links)
+        self.neibor_num = np.array([len(self.links[i])
+                                    for i in range(len(self.links))])
+        self.Qtable = InitQ * \
+            np.ones((node_num, node_num, self.neibor_num.max()))
+        self.Theta = InitP * \
+            np.ones((node_num, node_num, self.neibor_num.max()))
+
     def choose(self, source, dest):
-        """ choose returns the choice following weighted random sample, and the Q score of the choice
-        """
-        population, weight = zip(*[(k, v) for k, v in self.exp_theta(source, dest).items()])
-        choice = np.random.choice(population, p=weight)
+        """ choose returns the choice following weighted random sample """
+        theta = self.Theta[source][dest][:self.neibor_num[source]]
+        e_theta = np.exp(theta)
+        choice = np.random.choice(
+            self.links[source], p=e_theta/e_theta.sum(axis=0))
         return choice
 
-    def exp_theta(self, source, dest):
-        return OrderedDict({k: math.exp(v) for k, v in self.Theta[source][dest].items()})
-    
     def get_reward(self, source, dest, action):
-        agent_info = {}
-        agent_info['action_max'] = max(self.Qtable[action][dest].values())
-        agent_info['source_max'] = max(self.Qtable[source][dest].values())
-        return agent_info
+        return {
+            'action_max': self.Qtable[action][dest][:self.neibor_num[action]].max(),
+            'source_max': self.Qtable[source][dest][:self.neibor_num[source]].max(),
+        }
 
     def learn(self, reward_list, lrq=LearnRateQ, lrp=LearnRateP):
         for reward in reward_list:
@@ -38,15 +36,24 @@ class HybridQ:
             source, dest, action = reward.source, reward.dest, reward.action
             action_max = reward.agent_info['action_max']
             source_max = reward.agent_info['source_max']
-            old_Q_score = self.Qtable[source][dest][action]
-            self.Qtable[source][dest][action] += lrq * (-q-t + action_max - old_Q_score)
-            for neibor in self.Theta[source][dest]:
-                self.Theta[source][dest][neibor] += lrp * (-q-t + action_max - source_max) * self.gradient(source, dest, action, neibor)
+            action_index = self.links[source].index(action)
+            old_Q_score = self.Qtable[source][dest][action_index]
+            self.Qtable[source][dest][action_index] += lrq * \
+                (-q-t + action_max - old_Q_score)
+            self.Theta[source][dest][:self.neibor_num[source]] += lrp * \
+                (-q-t + action_max - source_max) * \
+                self.gradient(source, dest, action)
 
-    def gradient(self, source, dest, action, theta):
-        exp_theta = self.exp_theta(souce, dest)
-        exp_sum = sum(exp_theta.values())
-        if theta == action:
-            return 1 - exp_theta[theta]/exp_sum
-        return - exp_theta[theta]/exp_sum
-    
+    def gradient(self, source, dest, action):
+        """ gradient returns a vector with length of neibors of source """
+        theta = self.Theta[source][dest][:self.neibor_num[source]]
+        e_theta = np.exp(theta)
+        gradient = - e_theta/e_theta.sum(axis=0)
+        for i, n in enumerate(self.links[source]):
+            if n == action:
+                gradient[i] += 1
+        return gradient
+
+    def store(self, filename):
+        with open(filename, "wb") as f:
+            pickle.dump(self, f)

@@ -1,5 +1,4 @@
 import numpy as np
-from collections import OrderedDict
 from hybrid import HybridQ
 from config import *
 
@@ -34,16 +33,11 @@ class MaHybridQ(HybridQ):
 
         for i in range(num_rewards):
             # update Eligibility Trace
-            self.Trace[source[i]] += self.discount_trace * np.array(
-                [self.gradient(source[i], dest[i], action[i], neibor) for neibor in self.Theta[source[i]][dest[i]]])
+            self.Trace[source[i]] += self.discount_trace * self.gradient(source[i], dest[i], action[i])
             # update Theta
-            j = 0  # index self.Trace[source[i]]
-            for neibor in self.Theta[source[i]][dest[i]]:
-                self.Theta[source[i]][dest[i]][neibor] += lrp * self.Trace[source[i]][j] * (
-                    r_sum + self.discount*action_max_sum - source_max_sum)
-                j += 1
+            self.Theta[source[i]][dest[i]] += lrp * self.Trace[source[i]] * (
+                r_sum + self.discount*action_max_sum - source_max_sum)
             # update Q table
             old_Q_score = self.Qtable[source[i]][dest[i]][action[i]]
-            self.Qtable[source[i]][dest[i]][action[i]] += lrq * (
-                r[i] + self.discount*action_min[i] - old_Q_score)
+            self.Qtable[source[i]][dest[i]][action[i]] += lrq * (r[i] + self.discount*action_max[i] - old_Q_score)
             
