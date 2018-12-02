@@ -31,7 +31,6 @@ class Packet:
         self.trans_time  = 0
 
         self.hops       = 0
-        self.route_time = 0
 
     def __repr__(self):
         return "Packet<{}->{}>".format(self.source, self.dest)
@@ -93,7 +92,9 @@ class Node:
         self.queue = []
         self.sent  = {}
 
-        self.end_packets  = []
+        self.end_packets    = 0
+        self.route_time = 0
+        self.hops = 0
 
     def link(self, neibor):
         self.sent[neibor] = []
@@ -109,8 +110,9 @@ class Node:
         packet.current = self.ID
         if packet.dest == self.ID: # when the packet arrives its destination
             logging.debug("{}: {} reachs destination Node {}".format(self.clock, packet, self.ID))
-            packet.route_time = self.clock - packet.birth
-            self.end_packets.append(packet)
+            self.end_packets += 1
+            self.route_time += self.clock - packet.birth
+            self.hops += packet.hops
         else:
             packet.start_queue = self.clock
             self.queue.append(packet)
@@ -161,10 +163,8 @@ class Network:
         self.nodes       = OrderedDict()
         self.links       = OrderedDict()
         self.event_queue = []
-        self.rewards     = []
 
-        self.active_packets = []
-        self.end_packets    = []
+        self.all_packets = 0
 
         self.read_network(file)
 
@@ -197,31 +197,25 @@ class Network:
         for p in packets:
             self.inject(p)
 
+        rewards = []
         self.broadcast()
         for node in self.nodes.values():
             event, reward = node.send()
-            if event is not None and reward is not None:
+            if (event is not None) and (reward is not None):
                 self.event_queue.append(event)
-                self.rewards.append(reward)
+                rewards.append(reward)
 
-        while duration >= 0:
-            next_event = self.next_event()
-            if next_event is None or duration < next_event.arrive_time - self.clock:
-                self.clock += duration
-                self.broadcast()
-                rewards = self.rewards
-                self.rewards = []
-                self.check_end()
-                return rewards
-            else:
-                next_step   = next_event.arrive_time - self.clock
-                duration   -= next_step
-                self.clock += next_step
-                self.broadcast()
-                self.event_queue.remove(next_event)
-                p = next_event.packet
-                self.nodes[next_event.from_node].sent[next_event.to_node].remove(p)
-                self.nodes[next_event.to_node].receive(p)
+        for event in self.event_queue[:]:
+            if event.arrive_time <= self.clock + duration:
+                self.event_queue.remove(event)
+                p = event.packet
+                self.nodes[event.from_node].sent[event.to_node].remove(p)
+                self.nodes[event.to_node].clock = event.arrive_time
+                self.nodes[event.to_node].receive(p)
+        
+        self.clock += duration
+        self.broadcast()
+        return rewards
 
     def new_packet(self, lambd):
         """ Generates new packets following Poisson(lambd).
@@ -244,17 +238,8 @@ class Network:
 
     def inject(self, packet):
         """ Injects the packet into network """
-        self.active_packets.append(packet)
+        self.all_packets += 1
         self.nodes[packet.source].receive(packet)
-
-    def check_end(self):
-        """ Scan the ended packets in all nodes, remove them from active nodes. """
-        self.end_packets = []
-        for node in self.nodes.values():
-            self.end_packets += node.end_packets
-        for p in self.end_packets:
-            if p in self.active_packets:
-                self.active_packets.remove(p)
 
     def broadcast(self):
         """ Broadcast the network clock to nodes """
@@ -273,31 +258,20 @@ class Network:
             return event
         return None
 
-    def ave_hops(self, method="end"):
-        """ ave_hops return the average hops of packets, 
-            Three methods are provided:
+    @property
+    def end_packets(self):
+        return sum(node.end_packets for node in self.nodes.values())
 
-                "end"   : return the average hops of packets already ended at its destination.
-                "active": return the average hops of active packets in the network.
-                "all"   : return the average hops of all packets (active+end).
-        """
-        if method == "end":
-            if len(self.end_packets) > 0:
-                return np.mean([packet.hops for packet in self.end_packets])
-            return 0
-        elif method == "active":
-            if len(self.active_packets) > 0:
-                return np.mean([packet.hops for packet in self.active_packets])
-            return 0
-        elif method == "all":
-            if len(self.active_packets) > 0:
-                return np.mean([packet.hops for packet in self.active_packets+self.end_packets])
-            return 0
+    @property
+    def ave_hops(self):
+        if self.end_packets > 0:
+            return sum(node.hops for node in self.nodes.values())/self.end_packets
+        return 0
 
-
+    @property
     def ave_route_time(self):
-        if len(self.end_packets) > 0:
-            return np.mean([packet.route_time for packet in self.end_packets])
+        if self.end_packets > 0:
+            return sum(node.route_time for node in self.nodes.values())/self.end_packets
         return 0
 
 
