@@ -30,7 +30,7 @@ class Packet:
         self.queue_time  = 0
         self.trans_time  = 0
 
-        self.hops       = 0
+        self.hops = 0
 
     def __repr__(self):
         return "Packet<{}->{}>".format(self.source, self.dest)
@@ -92,7 +92,7 @@ class Node:
         self.queue = []
         self.sent  = {}
 
-        self.end_packets    = 0
+        self.end_packets = 0
         self.route_time = 0
         self.hops = 0
 
@@ -159,11 +159,12 @@ class Network:
         end_packets    (list): The packets already ends in its destination.
     """
     def __init__(self, file):
-        self.clock       = 0
-        self.nodes       = OrderedDict()
-        self.links       = OrderedDict()
-        self.event_queue = []
+        self.clock = 0
+        self.nodes = OrderedDict()
+        self.links = OrderedDict()
+        self.agent = None
 
+        self.event_queue = []
         self.all_packets = 0
 
         self.read_network(file)
@@ -182,6 +183,30 @@ class Network:
                 self.nodes[dest].link(source)
                 self.links[source].append(dest)
                 self.links[dest].append(source)
+
+    def bind(self, agent):
+        """ bind the given agent to every node """
+        self.agent = agent
+        for node in self.nodes.values():
+            node.agent = agent
+    
+    def train(self, steps, lambd=Lambda, duration=TimeSlot, lrq=LearnRateQ, lrp=LearnRateP):
+        route_time = np.zeros(steps)
+        for i in range(steps):
+            r = self.step(lambd=lambd, duration=duration)
+            if r is not None:
+                self.agent.learn(r, lrq=lrq, lrp=lrp)
+            route_time[i] = self.ave_route_time
+        return route_time
+
+    def clean(self):
+        """ empty the packets in the network """
+        self.event_queue = []
+        self.all_packets = 0
+        for node in self.nodes.values():
+            node.queue = []
+            for neibor in node.sent:
+                node.sent[neibor] = []
 
     def step(self, duration=TimeSlot, lambd=Lambda):
         """ step runs the whole network forward.
