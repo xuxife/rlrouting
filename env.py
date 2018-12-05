@@ -11,7 +11,7 @@ class Packet:
     Args:
         source, dest (int): The start/end nodes' ID.
         birth (int, time): When the packet is generated.
-    
+
     Attritubes:
         event (Event): The current event of this packet.
         start_queue (int, time): When the queuing started.
@@ -19,16 +19,17 @@ class Packet:
         hops (int): The number of hop (one hop is a jump from node to node).
         route_time (int, time): The duration from birth to end.
     """
-    def __init__(self, source, dest, birth):
-        self.source  = source
-        self.dest    = dest
-        self.current = source
-        self.birth   = birth
 
-        self.event       = None
+    def __init__(self, source, dest, birth):
+        self.source = source
+        self.dest = dest
+        self.current = source
+        self.birth = birth
+
+        self.event = None
         self.start_queue = 0
-        self.queue_time  = 0
-        self.trans_time  = 0
+        self.queue_time = 0
+        self.trans_time = 0
 
         self.hops = 0
 
@@ -45,10 +46,11 @@ class Event:
         to_node     (int)   : Where the delivery ends, the destination.
         arrive_time (int)   : When the corresponding packet would arrive to_node.
     """
+
     def __init__(self, packet, from_node, to_node, arrive_time):
-        self.packet      = packet
-        self.from_node   = from_node
-        self.to_node     = to_node
+        self.packet = packet
+        self.from_node = from_node
+        self.to_node = to_node
         self.arrive_time = arrive_time
 
     def __repr__(self):
@@ -64,13 +66,14 @@ class Reward:
         queue/trans_time (int, time): The time cost on queue/transmission on the last node/connection
         agent_info (:obj:): Extra information from agent.get_reward
     """
+
     def __init__(self, source, packet, choice, agent_info):
-        self.source     = source
-        self.dest       = packet.dest
-        self.action     = choice
+        self.source = source
+        self.dest = packet.dest
+        self.action = choice
         self.queue_time = packet.queue_time
         self.trans_time = packet.trans_time
-        self.agent_info = agent_info # extra information defined by agents
+        self.agent_info = agent_info  # extra information defined by agents
 
     def __repr__(self):
         return "Reward<{}->{} by {}|queue: {}, trans: {}>".format(
@@ -86,11 +89,12 @@ class Node:
 
         end_packets (list): All packets end in this node.
     """
+
     def __init__(self, ID, clock):
-        self.ID    = ID
+        self.ID = ID
         self.clock = clock
         self.queue = []
-        self.sent  = {}
+        self.sent = {}
 
         self.end_packets = 0
         self.route_time = 0
@@ -106,10 +110,12 @@ class Node:
         """ Receive a packet.
         Update statistic attritubes if this packet ends here, else append the packet into queue.
         """
-        logging.debug("{}: Node {} receives {}".format(self.clock, self.ID, packet))
+        logging.debug("{}: Node {} receives {}".format(
+            self.clock, self.ID, packet))
         packet.current = self.ID
-        if packet.dest == self.ID: # when the packet arrives its destination
-            logging.debug("{}: {} reachs destination Node {}".format(self.clock, packet, self.ID))
+        if packet.dest == self.ID:  # when the packet arrives its destination
+            logging.debug("{}: {} reachs destination Node {}".format(
+                self.clock, packet, self.ID))
             self.end_packets += 1
             self.route_time += self.clock - packet.birth
             self.hops += packet.hops
@@ -130,12 +136,13 @@ class Node:
         for p in self.queue:
             choice = self.agent.choose(self.ID, p.dest)
             if len(self.sent[choice]) < BandwidthLimit:
-                logging.debug("{}: Node {} sends {} to {}".format(self.clock, self.ID, p, choice))
+                logging.debug("{}: Node {} sends {} to {}".format(
+                    self.clock, self.ID, p, choice))
                 self.queue.remove(p)
-                p.queue_time  = self.clock - p.start_queue
-                p.trans_time  = TransTime # set the transmission delay
-                p.event       = Event(p, self.ID, choice, self.clock+p.trans_time)
-                p.hops       += 1
+                p.queue_time = self.clock - p.start_queue
+                p.trans_time = TransTime  # set the transmission delay
+                p.event = Event(p, self.ID, choice, self.clock+p.trans_time)
+                p.hops += 1
                 self.sent[choice].append(p)
                 return p.event, Reward(self.ID, p, choice, self.agent.get_reward(self.ID, p.dest, choice))
         return None, None
@@ -158,6 +165,7 @@ class Network:
         active_packets (list): The packets are still active in the network.
         end_packets    (list): The packets already ends in its destination.
     """
+
     def __init__(self, file):
         self.clock = 0
         self.nodes = OrderedDict()
@@ -189,7 +197,7 @@ class Network:
         self.agent = agent
         for node in self.nodes.values():
             node.agent = agent
-    
+
     def train(self, steps, lambd=Lambda, duration=TimeSlot, lrq=LearnRateQ, lrp=LearnRateP):
         route_time = np.zeros(steps)
         for i in range(steps):
@@ -237,7 +245,7 @@ class Network:
                 self.nodes[event.from_node].sent[event.to_node].remove(p)
                 self.nodes[event.to_node].clock = event.arrive_time
                 self.nodes[event.to_node].receive(p)
-        
+
         self.clock += duration
         self.broadcast()
         return rewards
@@ -250,12 +258,12 @@ class Network:
         Returns:
             list: A list of new packets having random sources and destinations..
         """
-        size     = np.random.poisson(lambd)
-        packets  = []
+        size = np.random.poisson(lambd)
+        packets = []
         nodes_id = list(self.nodes.keys())
         for _ in range(size):
             source = np.random.choice(nodes_id)
-            dest   = np.random.choice(nodes_id)
+            dest = np.random.choice(nodes_id)
             while dest == source:
                 dest = np.random.choice(nodes_id)
             packets.append(Packet(source, dest, self.clock))
@@ -270,7 +278,7 @@ class Network:
         """ Broadcast the network clock to nodes """
         for node in self.nodes.values():
             node.clock = self.clock
-    
+
     def next_event(self):
         """ Returns:
             Event: The closest event would happen.
@@ -307,14 +315,16 @@ def print6x6(network):
         for j in range(5):
             print("│No.{:2d}│".format(6*i+j), end="")
             if 6*i+j+1 in network.links[6*i+j]:
-                print(" {:2d}├ ".format(len(network.nodes[6*i+j].sent[6*i+j+1])), end="")
+                print(" {:2d}├ ".format(
+                    len(network.nodes[6*i+j].sent[6*i+j+1])), end="")
             else:
                 print(" "*5, end="")
         print("│No.{:2d}│".format(6*i+5))
         for j in range(5):
             print("│{:5d}│".format(len(network.nodes[6*i+j].queue)), end="")
             if 6*i+j in network.links[6*i+j+1]:
-                print(" ┤{:<2d} ".format(len(network.nodes[6*i+j+1].sent[6*i+j])), end="")
+                print(" ┤{:<2d} ".format(
+                    len(network.nodes[6*i+j+1].sent[6*i+j])), end="")
             else:
                 print(" "*5, end="")
         print("│{:5d}│".format(len(network.nodes[6*i+5].queue)))
@@ -324,7 +334,8 @@ def print6x6(network):
             break
         for j in range(6):
             if 6*i+j in network.links[6*i+j+6]:
-                print("{:2d}┴ ┬{:<2d}     ".format(len(network.nodes[6*i+j+6].sent[6*i+j]), len(network.nodes[6*i+j].sent[6*i+j+6])), end="")
+                print("{:2d}┴ ┬{:<2d}     ".format(len(
+                    network.nodes[6*i+j+6].sent[6*i+j]), len(network.nodes[6*i+j].sent[6*i+j+6])), end="")
             else:
                 print(" "*12, end="")
         print()
