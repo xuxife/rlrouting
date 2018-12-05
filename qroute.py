@@ -30,14 +30,14 @@ class Qroute:
     def get_reward(self, source, dest, action):
         return {'action_max': self.Qtable[action][dest][:self.neibor_num[action]].max()}
 
-    def learn(self, reward_list, lr=LearnRateQ):
+    def learn(self, reward_list, lrq=LearnRateQ, lrp=0):
         for reward in reward_list:
             q, t = reward.queue_time, reward.trans_time
             source, dest, action = reward.source, reward.dest, reward.action
             action_max = reward.agent_info['action_max']
             action_index = self.links[source].index(action)
             old_score = self.Qtable[source][dest][action_index]
-            self.Qtable[source][dest][action_index] += lr * \
+            self.Qtable[source][dest][action_index] += lrq * \
                 (-q-t + action_max - old_score)
 
     def store(self, filename):
