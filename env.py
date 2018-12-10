@@ -26,12 +26,10 @@ class Packet:
         self.current = source
         self.birth = birth
 
-        self.event = None
+        self.hops = 0
         self.start_queue = 0
         self.queue_time = 0
         self.trans_time = 0
-
-        self.hops = 0
 
     def __repr__(self):
         return "Packet<{}->{}>".format(self.source, self.dest)
@@ -40,7 +38,7 @@ class Packet:
 class Event:
     """ Event records a packet passing through a connection.
 
-    Args: 
+    Args:
         packet      (Packet): Which packet is being delivering of this event.
         from_node   (int)   : Where the delivery begins.
         to_node     (int)   : Where the delivery ends, the destination.
@@ -90,11 +88,12 @@ class Node:
         end_packets (list): All packets end in this node.
     """
 
-    def __init__(self, ID, clock):
+    def __init__(self, ID, clock, network):
         self.ID = ID
         self.clock = clock
         self.queue = []
         self.sent = {}
+        self.network = network
 
         self.end_packets = 0
         self.route_time = 0
@@ -110,54 +109,58 @@ class Node:
         """ Receive a packet.
         Update statistic attritubes if this packet ends here, else append the packet into queue.
         """
-        logging.debug("{}: Node {} receives {}".format(
-            self.clock, self.ID, packet))
         packet.current = self.ID
+        logging.debug("{}: {} receives {}".format(self.clock, self.ID, packet))
+
         if packet.dest == self.ID:  # when the packet arrives its destination
-            logging.debug("{}: {} reachs destination Node {}".format(
+            logging.debug("{}: {} ends in {}".format(
                 self.clock, packet, self.ID))
-            self.end_packets += 1
-            self.route_time += self.clock - packet.birth
-            self.hops += packet.hops
+            self.network.end_packets += 1
+            self.network.route_time += self.clock - packet.birth
+            self.network.hops += packet.hops
+            del packet
         else:
             packet.start_queue = self.clock
             self.queue.append(packet)
 
     def send(self):
         """ Send a packet ordered by queue.
-        Call agent.choose to determine the next node for the packet, 
+        Call agent.choose to determine the next node for the packet,
         then check whether the connection is avaliable.
 
         Returns:
-            Event : Records the information of this delivery.
             Reward: Reward of this action.
             None if no packet is sent.
         """
-        for p in self.queue:
-            choice = self.agent.choose(self.ID, p.dest)
+        i = 0
+        while i < len(self.queue):
+            choice = self.agent.choose(self.ID, self.queue[i].dest)
             if len(self.sent[choice]) < BandwidthLimit:
-                logging.debug("{}: Node {} sends {} to {}".format(
+                p = self.queue.pop(i)
+                logging.debug("{}: {} sends {} to {}".format(
                     self.clock, self.ID, p, choice))
-                self.queue.remove(p)
+                p.hops += 1
                 p.queue_time = self.clock - p.start_queue
                 p.trans_time = TransTime  # set the transmission delay
-                p.event = Event(p, self.ID, choice, self.clock+p.trans_time)
-                p.hops += 1
+                self.network.event_queue.append(
+                    Event(p, self.ID, choice, self.clock+p.trans_time))
                 self.sent[choice].append(p)
-                return p.event, Reward(self.ID, p, choice, self.agent.get_reward(self.ID, p.dest, choice))
-        return None, None
+                return Reward(self.ID, p, choice, self.agent.get_reward(self.ID, p.dest, choice))
+            else:
+                i += 1
+        return None
 
 
 class Network:
-    """ Network simulates packtes routing between connected nodes. 
+    """ Network simulates packtes routing between connected nodes.
 
     Args:
         file (string): The name of network file.
 
     Attributes:
         clock (int, time): The simulation time.
-        nodes (dict): Keys are nodes' ID, values are nodes.
-        links (dict): Keys are nodes' ID, values are lists of connected nodes' ID.
+        nodes (list): nodes
+        links (list): lists of connected nodes' ID.
 
         event_queue (list): A queue of following happen events.
         rewards     (list): A list of rewards after call step function.
@@ -168,25 +171,31 @@ class Network:
 
     def __init__(self, file):
         self.clock = 0
+        self.project = {}  # project from file identity to node ID
         self.nodes = OrderedDict()
         self.links = OrderedDict()
         self.agent = None
 
         self.event_queue = []
         self.all_packets = 0
+        self.end_packets = 0
+        self.hops = 0
+        self.route_time = 0
 
         self.read_network(file)
 
     def read_network(self, file):
         with open(file, 'r') as f:
             lines = [l.split() for l in f.readlines()]
+        ID = 0
         for l in lines:
             if l[0] == "1000":
-                ID = int(l[1])
-                self.nodes[ID] = Node(ID, self.clock)
+                self.project[l[1]] = ID
+                self.nodes[ID] = Node(ID, self.clock, self)
                 self.links[ID] = []
-            if l[0] == "2000":
-                source, dest = int(l[1]), int(l[2])
+                ID += 1
+            elif l[0] == "2000":
+                source, dest = self.project[l[1]], self.project[l[2]]
                 self.nodes[source].link(dest)
                 self.nodes[dest].link(source)
                 self.links[source].append(dest)
@@ -208,11 +217,15 @@ class Network:
         return route_time
 
     def clean(self):
-        """ empty the packets in the network """
+        """ empty the network """
+        self.time = 0
         self.event_queue = []
         self.all_packets = 0
         for node in self.nodes.values():
+            node.hops = 0
             node.queue = []
+            node.route_time = 0
+            node.end_packets = 0
             for neibor in node.sent:
                 node.sent[neibor] = []
 
@@ -233,18 +246,19 @@ class Network:
         rewards = []
         self.broadcast()
         for node in self.nodes.values():
-            event, reward = node.send()
-            if (event is not None) and (reward is not None):
-                self.event_queue.append(event)
+            reward = node.send()
+            if reward is not None:
                 rewards.append(reward)
 
-        for event in self.event_queue[:]:
-            if event.arrive_time <= self.clock + duration:
-                self.event_queue.remove(event)
-                p = event.packet
-                self.nodes[event.from_node].sent[event.to_node].remove(p)
-                self.nodes[event.to_node].clock = event.arrive_time
-                self.nodes[event.to_node].receive(p)
+        i = 0
+        while i < len(self.event_queue):
+            if self.event_queue[i].arrive_time <= self.clock + duration:
+                e = self.event_queue.pop(i)
+                self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
+                self.nodes[e.to_node].clock = e.arrive_time
+                self.nodes[e.to_node].receive(e.packet)
+            else:
+                i += 1
 
         self.clock += duration
         self.broadcast()
@@ -279,32 +293,16 @@ class Network:
         for node in self.nodes.values():
             node.clock = self.clock
 
-    def next_event(self):
-        """ Returns:
-            Event: The closest event would happen.
-        """
-        if len(self.event_queue) > 0:
-            event = self.event_queue[0]
-            for e in self.event_queue:
-                if e.arrive_time < event.arrive_time:
-                    event = e
-            return event
-        return None
-
-    @property
-    def end_packets(self):
-        return sum(node.end_packets for node in self.nodes.values())
-
     @property
     def ave_hops(self):
         if self.end_packets > 0:
-            return sum(node.hops for node in self.nodes.values())/self.end_packets
+            return self.hops / self.end_packets
         return 0
 
     @property
     def ave_route_time(self):
         if self.end_packets > 0:
-            return sum(node.route_time for node in self.nodes.values())/self.end_packets
+            return self.route_time / self.end_packets
         return 0
 
 
