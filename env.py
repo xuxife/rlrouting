@@ -95,10 +95,6 @@ class Node:
         self.sent = {}
         self.network = network
 
-        self.end_packets = 0
-        self.route_time = 0
-        self.hops = 0
-
     def link(self, neibor):
         self.sent[neibor] = []
 
@@ -218,14 +214,14 @@ class Network:
 
     def clean(self):
         """ empty the network """
-        self.time = 0
+        self.clock = 0
         self.event_queue = []
         self.all_packets = 0
+        self.end_packets = 0
+        self.route_time = 0
+        self.hops = 0
         for node in self.nodes.values():
-            node.hops = 0
             node.queue = []
-            node.route_time = 0
-            node.end_packets = 0
             for neibor in node.sent:
                 node.sent[neibor] = []
 
