@@ -1,5 +1,6 @@
 InitQ          = 0    # inital value of Q table
 InitP          = 0
+Gamma          = 0.99
 Lambda         = 2   # packets per TimeSlot
 Discount       = 0.99 # discount factor
 DiscountTrace  = 0.9  # discount factor of eligibity trace

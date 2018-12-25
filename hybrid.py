@@ -6,11 +6,12 @@ from config import *
 
 
 class HybridQ:
-    def __init__(self, network, initQ=InitQ, initP=InitP):
+    def __init__(self, network, initQ=InitQ, initP=InitP, gamma=Gamma):
+        self.gamma = Gamma
         self.nw, self.links = network, network.links
         node_num = len(self.links)
         self.neibor_num = np.array([len(self.links[i])
-                                    for i in range(len(self.links))])
+                                    for i in self.links.keys()])
         self.Qtable = InitQ * \
             np.ones((node_num, node_num, self.neibor_num.max()))
         self.Theta = InitP * \
@@ -40,9 +41,14 @@ class HybridQ:
             old_Q_score = self.Qtable[source][dest][action_index]
             self.Qtable[source][dest][action_index] += lrq * \
                 (-q-t + action_max - old_Q_score)
-            self.Theta[source][dest][:self.neibor_num[source]] += lrp * \
-                (-q-t + action_max - source_max) * \
+            delta = lrp *\
+                (-q-t + self.gamma*action_max - source_max) * \
                 self.gradient(source, dest, action)
+            expTheta = self.Theta[source][dest][:self.neibor_num[source]].exp()
+            delta[(expTheta > 0.99) & (delta > 0)] = 0
+            delta[(expTheta < 0.01) & (delta < 0)] = 0
+            self.Theta[source][dest][:self.neibor_num[source]] += delta
+        # np.clip(self.Theta, *self.bound)
 
     def gradient(self, source, dest, action):
         """ gradient returns a vector with length of neibors of source """
