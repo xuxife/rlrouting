@@ -44,7 +44,8 @@ class HybridQ:
             delta = lrp *\
                 (-q-t + self.gamma*action_max - source_max) * \
                 self.gradient(source, dest, action)
-            expTheta = self.Theta[source][dest][:self.neibor_num[source]].exp()
+            expTheta = np.exp(self.Theta[source]
+                              [dest][:self.neibor_num[source]])
             delta[(expTheta > 0.99) & (delta > 0)] = 0
             delta[(expTheta < 0.01) & (delta < 0)] = 0
             self.Theta[source][dest][:self.neibor_num[source]] += delta
