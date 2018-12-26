@@ -46,10 +46,10 @@ class HybridQ:
                 self.gradient(source, dest, action)
             expTheta = np.exp(self.Theta[source]
                               [dest][:self.neibor_num[source]])
-            delta[(expTheta > 0.99) & (delta > 0)] = 0
-            delta[(expTheta < 0.01) & (delta < 0)] = 0
+            # if not (0.01 <= expTheta <= 0.99):
+            #     delta = 0
             self.Theta[source][dest][:self.neibor_num[source]] += delta
-        # np.clip(self.Theta, *self.bound)
+        np.clip(self.Theta, -2, 2)
 
     def gradient(self, source, dest, action):
         """ gradient returns a vector with length of neibors of source """
