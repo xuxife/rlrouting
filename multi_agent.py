@@ -33,7 +33,7 @@ class MaHybridQ(HybridQ):
 
         for i in range(num_rewards):
             # update Eligibility Trace
-            self.Trace[source[i]] += self.discount_trace * self.gradient(source[i], dest[i], action[i])
+            self.Trace[source[i]] = self.discount_trace * self.Trace[source[i]] + self.gradient(source[i], dest[i], action[i])
             # update Theta
             self.Theta[source[i]][dest[i]] += lrp * self.Trace[source[i]] * (
                 r_sum + self.discount*action_max_sum - source_max_sum)

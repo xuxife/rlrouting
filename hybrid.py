@@ -46,8 +46,6 @@ class HybridQ:
                 self.gradient(source, dest, action)
             expTheta = np.exp(self.Theta[source]
                               [dest][:self.neibor_num[source]])
-            # if not (0.01 <= expTheta <= 0.99):
-            #     delta = 0
             self.Theta[source][dest][:self.neibor_num[source]] += delta
         np.clip(self.Theta, -2, 2)
 
