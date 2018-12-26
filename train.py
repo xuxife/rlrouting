@@ -1,6 +1,9 @@
 import logging
 import numpy as np
 import pickle
+import matplotlib.pyplot as plt
+import pandas as pd
+
 
 from env import *
 from config import *
@@ -10,37 +13,54 @@ from hybrid import HybridQ
 from multi_agent import MaHybridQ
 
 np.random.seed(1)
+# =============
 # logger = logging.getLogger()
 # logger.setLevel(logging.DEBUG)
+# =============
 
 File = "6x6.net"
 nw = Network(File)
 
+
+def load_agent(file):
+    with open(file, 'rb') as f:
+        return pickle.load(f)
+
+
 # =============
 # agent = Shortest(nw)
-agent = Qroute(nw)
-# agent = HybridQ(nw)
+# agent = Qroute(nw)
+agent = HybridQ(nw)
 # agent = MaHybridQ(nw)
 # =============
-# agentFile = "0.2/qroute3w0.3.pkl"
-agentFile = "1.5/qroute.pkl"
-with open(agentFile, "rb") as f:
-    agent = pickle.load(f)
+# agent.Qtable = load_agent('exp_data/qroute/{}.pkl'.format(l-0.25)).Qtable
+# agent.Theta = load_agent('exp_data/hybrid/{}.pkl'.format(l-0.25)).Theta
 # =============
+nw.bind(agent)
 
-for node in nw.nodes.values():
-    node.agent = agent
+# =============
+# Train
+# load = np.arange(0.5, 3.5, 0.25)
+load = np.arange(0.25, 1.5, 0.25)
+route_time = {}
+for l in load:
+    # nw.bind(load_agent('exp_data/qroute/{}.pkl'.format(l)))
+    #     nw.bind(load_agent('exp_data/hybrid/{}.pkl'.format(l)))
+    #     nw.bind(load_agent('exp_data/hybrid/{}.pkl'.format(l-0.25)))
+    nw.clean()
+    route_time[l] = nw.train(10000, lambd=l, lrq=0.1, lrp=0.05)
+# agent.store('exp_data/qroute/{}.pkl'.format(l))
+#     agent.store('exp_data/hybrid/{}.pkl'.format(l))
 
-route_time = []
-for i in range(10000):
-    r = nw.step(lambd=1.8)
-    if r is not None:
-        agent.learn(r, lr=0.3)
-        # agent.learn(r, lrq=0.01, lrp=0.01)
-    route_time.append(nw.ave_route_time)
-
-import pandas as pd
-import matplotlib.pyplot as plt
 df = pd.DataFrame(route_time)
 df.plot()
 plt.show()
+# final = df.tail(1)
+# final.T.plot()
+# plt.plot(route_time[l])
+# =============
+# df.to_msgpack('exp_data/qroute0.25-3.75.msg')
+
+# s = pd.read_msgpack('exp_data/shortest0.25-2.25.msg')
+# n = pd.concat([final, s.tail(1)])
+# plt.plot(route_time['3.5v3'])
