@@ -41,19 +41,22 @@ nw.bind(agent)
 # =============
 # Train
 # load = np.arange(0.5, 3.5, 0.25)
-load = np.arange(0.25, 1.5, 0.25)
+load = np.arange(0.25, 0.5, 0.25)
 route_time = {}
+drop_rate = {}
 for l in load:
     # nw.bind(load_agent('exp_data/qroute/{}.pkl'.format(l)))
     #     nw.bind(load_agent('exp_data/hybrid/{}.pkl'.format(l)))
     #     nw.bind(load_agent('exp_data/hybrid/{}.pkl'.format(l-0.25)))
     nw.clean()
-    route_time[l] = nw.train(10000, lambd=l, lrq=0.1, lrp=0.05)
+    route_time[l], drop_rate[l] = nw.train(10000, lambd=l, lrq=0.1, lrp=0.01)
 # agent.store('exp_data/qroute/{}.pkl'.format(l))
 #     agent.store('exp_data/hybrid/{}.pkl'.format(l))
 
 df = pd.DataFrame(route_time)
 df.plot()
+drop = pd.DataFrame(drop_rate)
+drop.plot()
 plt.show()
 # final = df.tail(1)
 # final.T.plot()
