@@ -1,7 +1,9 @@
 import numpy as np
 
+
 class Shortest:
     """ Shortest agent determine the action based on the shortest path distance. """
+
     def __init__(self, network):
         node_num = len(network.nodes)
         self.distance = np.zeros((node_num, node_num), dtype=np.int)
@@ -12,7 +14,8 @@ class Shortest:
                 self.choice[node][neibor] = neibor
             for dest_node in network.links.keys():
                 if dest_node != node and dest_node not in neibors:
-                    self.distance[node][dest_node] = len(network.links) + 1 # large enough
+                    self.distance[node][dest_node] = len(
+                        network.links) + 1  # large enough
         changing = True
         while changing:
             changing = False
@@ -27,9 +30,12 @@ class Shortest:
     def choose(self, source, dest):
         """ Return the action with shortest distance and the distance """
         return self.choice[source][dest]
-    
+
     def learn(self, reward, lrq=0, lrp=0):
-        return
+        pass
 
     def get_reward(self, source, dest, action):
-        return
+        pass
+
+    def drop_penalty(self, event):
+        pass

@@ -62,3 +62,6 @@ class HybridQ:
     def store(self, filename):
         with open(filename, "wb") as f:
             pickle.dump(self, f)
+
+    def drop_penalty(self, event):
+        pass

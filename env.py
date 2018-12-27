@@ -255,6 +255,7 @@ class Network:
                 self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
                 self.drop_packets += 1
                 self.active_packets -= 1
+                self.agent.drop_penalty(e)
             elif self.event_queue[i].arrive_time <= self.clock + duration:
                 e = self.event_queue.pop(i)
                 self.nodes[e.from_node].sent[e.to_node].remove(e.packet)

@@ -47,3 +47,6 @@ class MaHybridQ(HybridQ):
             old_Q_score = self.Qtable[source[i]][dest[i]][action_index]
             self.Qtable[source[i]][dest[i]][action_index] += lrq * \
                 (r[i] + self.discount*action_max[i] - old_Q_score)
+
+    def drop_penalty(self, event):
+        pass
