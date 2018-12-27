@@ -111,6 +111,7 @@ class Node:
         if packet.dest == self.ID:  # when the packet arrives its destination
             logging.debug("{}: {} ends in {}".format(
                 self.clock, packet, self.ID))
+            self.network.active_packets -= 1
             self.network.end_packets += 1
             self.network.route_time += self.clock - packet.birth
             self.network.hops += packet.hops
@@ -166,17 +167,12 @@ class Network:
     """
 
     def __init__(self, file):
-        self.clock = 0
         self.project = {}  # project from file identity to node ID
         self.nodes = OrderedDict()
         self.links = OrderedDict()
         self.agent = None
 
-        self.event_queue = []
-        self.all_packets = 0
-        self.end_packets = 0
-        self.hops = 0
-        self.route_time = 0
+        self.clean()
 
         self.read_network(file)
 
@@ -204,26 +200,26 @@ class Network:
             node.agent = agent
 
     def train(self, steps, lambd=Lambda, duration=TimeSlot, lrq=LearnRateQ, lrp=LearnRateP):
-        route_time = np.zeros(steps)
+        route_time, drop_rate = np.zeros(steps), np.zeros(steps)
         for i in range(steps):
             r = self.step(lambd=lambd, duration=duration)
             if r is not None:
                 self.agent.learn(r, lrq=lrq, lrp=lrp)
             route_time[i] = self.ave_route_time
-        return route_time
+            drop_rate[i] = self.drop_rate
+        return route_time, drop_rate
 
     def clean(self):
-        """ empty the network """
+        """ reset the network attritubes """
         self.clock = 0
         self.event_queue = []
         self.all_packets = 0
         self.end_packets = 0
-        self.route_time = 0
+        self.drop_packets = 0  # the number of packets dropped in the last step
+        self.active_packets = 0
+        self.total_drop_packet = 0
         self.hops = 0
-        for node in self.nodes.values():
-            node.queue = []
-            for neibor in node.sent:
-                node.sent[neibor] = []
+        self.route_time = 0
 
     def step(self, duration=TimeSlot, lambd=Lambda):
         """ step runs the whole network forward.
@@ -248,7 +244,13 @@ class Network:
 
         i = 0
         while i < len(self.event_queue):
-            if self.event_queue[i].arrive_time <= self.clock + duration:
+            if self.event_queue[i].packet.hops >= len(self.nodes):
+                # drop the packet if too many hops
+                e = self.event_queue.pop(i)
+                self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
+                self.drop_packets += 1
+                self.active_packets -= 1
+            elif self.event_queue[i].arrive_time <= self.clock + duration:
                 e = self.event_queue.pop(i)
                 self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
                 self.nodes[e.to_node].clock = e.arrive_time
@@ -282,6 +284,7 @@ class Network:
     def inject(self, packet):
         """ Injects the packet into network """
         self.all_packets += 1
+        self.active_packets += 1
         self.nodes[packet.source].receive(packet)
 
     def broadcast(self):
@@ -291,15 +294,15 @@ class Network:
 
     @property
     def ave_hops(self):
-        if self.end_packets > 0:
-            return self.hops / self.end_packets
-        return 0
+        return self.hops / self.end_packets if self.end_packets > 0 else 0
 
     @property
     def ave_route_time(self):
-        if self.end_packets > 0:
-            return self.route_time / self.end_packets
-        return 0
+        return self.route_time / self.end_packets if self.end_packets > 0 else 0
+
+    @property
+    def drop_rate(self):
+        return self.drop_packets / self.all_packets if self.all_packets > 0 else 0
 
 
 def print6x6(network):
