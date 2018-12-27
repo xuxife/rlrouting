@@ -30,8 +30,9 @@ class MaHybridQ(HybridQ):
             action_max[i] = reward.agent_info['action_max']
             source_max[i] = reward.agent_info['source_max']
 
-        r = - q - t + self.reward_shape  # r_t = -(q+t) + r_shaping
-        r_sum = sum(r)
+        r = - q - t # r_t = -(q+t) + r_shaping
+        r_sum = sum(r) + self.reward_shape
+        self.reward_shape = 0
         action_max_sum = sum(action_max)
         source_max_sum = sum(source_max)
 
