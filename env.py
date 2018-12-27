@@ -220,6 +220,11 @@ class Network:
         self.total_drop_packet = 0
         self.hops = 0
         self.route_time = 0
+        for node in self.nodes.values():
+            node.clock = self.clock
+            node.queue = []
+            for neibor in node.sent:
+                node.sent[neibor] = []
 
     def step(self, duration=TimeSlot, lambd=Lambda):
         """ step runs the whole network forward.
