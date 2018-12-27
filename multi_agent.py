@@ -13,6 +13,7 @@ class MaHybridQ(HybridQ):
         self.Trace = {}
         self.discount = discount
         self.discount_trace = discount_trace
+        self.reward_shape = 0
         self.Trace = np.zeros(self.Qtable.shape)
 
     def learn(self, reward_list, lrq=LearnRateQ, lrp=LearnRateP):
@@ -29,7 +30,7 @@ class MaHybridQ(HybridQ):
             action_max[i] = reward.agent_info['action_max']
             source_max[i] = reward.agent_info['source_max']
 
-        r = - q - t  # r_t = -(q+t) + r_shaping
+        r = - q - t + self.reward_shape  # r_t = -(q+t) + r_shaping
         r_sum = sum(r)
         action_max_sum = sum(action_max)
         source_max_sum = sum(source_max)
@@ -49,4 +50,4 @@ class MaHybridQ(HybridQ):
                 (r[i] + self.discount*action_max[i] - old_Q_score)
 
     def drop_penalty(self, event):
-        pass
+        self.reward_shape += DropPenalty

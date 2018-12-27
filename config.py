@@ -4,6 +4,7 @@ Gamma          = 0.99
 Lambda         = 2   # packets per TimeSlot
 Discount       = 0.99 # discount factor
 DiscountTrace  = 0.9  # discount factor of eligibity trace
+DropPenalty    = -6
 TimeSlot       = 1  # th eduratoin of one time slot
 TransTime      = 1  # transmission delay
 LearnRateQ     = 0.1
