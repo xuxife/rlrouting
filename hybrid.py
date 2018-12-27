@@ -40,7 +40,7 @@ class HybridQ:
             action_index = self.links[source].index(action)
             old_Q_score = self.Qtable[source][dest][action_index]
             self.Qtable[source][dest][action_index] += lrq * \
-                (-q-t + action_max - old_Q_score)
+                (-q-t + self.gamma*action_max - old_Q_score)
             delta = lrp *\
                 (-q-t + self.gamma*action_max - source_max) * \
                 self.gradient(source, dest, action)
