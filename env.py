@@ -249,7 +249,7 @@ class Network:
 
         i = 0
         while i < len(self.event_queue):
-            if self.event_queue[i].packet.hops >= len(self.nodes):
+            if IsDrop and self.event_queue[i].packet.hops >= len(self.nodes):
                 # drop the packet if too many hops
                 e = self.event_queue.pop(i)
                 self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
