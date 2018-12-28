@@ -30,8 +30,8 @@ def load_agent(file):
 # =============
 # agent = Shortest(nw)
 # agent = Qroute(nw)
-agent = HybridQ(nw)
-# agent = MaHybridQ(nw)
+# agent = HybridQ(nw)
+agent = MaHybridQ(nw)
 # =============
 # agent.Qtable = load_agent('exp_data/qroute/{}.pkl'.format(l-0.25)).Qtable
 # agent.Theta = load_agent('exp_data/hybrid/{}.pkl'.format(l-0.25)).Theta
@@ -49,14 +49,14 @@ for l in load:
     #     nw.bind(load_agent('exp_data/hybrid/{}.pkl'.format(l)))
     #     nw.bind(load_agent('exp_data/hybrid/{}.pkl'.format(l-0.25)))
     nw.clean()
-    route_time[l], drop_rate[l] = nw.train(10000, lambd=l, lrq=0.1, lrp=0.01)
+    route_time[l], drop_rate[l] = nw.train(10000, lambd=l, lrq=0.1, lrp=0.001)
 # agent.store('exp_data/qroute/{}.pkl'.format(l))
 #     agent.store('exp_data/hybrid/{}.pkl'.format(l))
 
 df = pd.DataFrame(route_time)
-df.plot()
 drop = pd.DataFrame(drop_rate)
-drop.plot()
+df.plot(title='Average Route Time')
+drop.plot(title='Drop Rate')
 plt.show()
 # final = df.tail(1)
 # final.T.plot()
