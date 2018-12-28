@@ -30,25 +30,24 @@ class MaHybridQ(HybridQ):
             action_max[i] = reward.agent_info['action_max']
             source_max[i] = reward.agent_info['source_max']
 
-        r = - q - t # r_t = -(q+t) + r_shaping
+        r = - q - t  # r_t = -(q+t) + r_shaping
         r_sum = sum(r) + self.reward_shape
         self.reward_shape = 0
         action_max_sum = sum(action_max)
         source_max_sum = sum(source_max)
-
+        delta = r_sum + self.discount*action_max_sum - source_max_sum
+        # update Eligibility Trace
+        self.Trace *= self.discount_trace
         for i in range(num_rewards):
-            # update Eligibility Trace
-            self.Trace[source[i]] *= self.discount_trace
             self.Trace[source[i]][dest[i]][:self.neibor_num[source[i]]
                                            ] += self.gradient(source[i], dest[i], action[i])
-            # update Theta
-            self.Theta[source[i]] += lrp * self.Trace[source[i]] * (
-                r_sum + self.discount*action_max_sum - source_max_sum)
             # update Q table
             action_index = self.links[source[i]].index(action[i])
             old_Q_score = self.Qtable[source[i]][dest[i]][action_index]
             self.Qtable[source[i]][dest[i]][action_index] += lrq * \
                 (r[i] + self.discount*action_max[i] - old_Q_score)
+        # Update Theta
+        self.Theta += lrp * delta * self.Trace
 
     def drop_penalty(self, event):
         self.reward_shape += DropPenalty
