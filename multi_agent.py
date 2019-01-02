@@ -31,11 +31,9 @@ class MaHybridQ(HybridQ):
             source_max[i] = reward.agent_info['source_max']
 
         r = - q - t  # r_t = -(q+t) + r_shaping
-        r_sum = sum(r) + self.reward_shape
+        delta = r.sum() + self.reward_shape + self.discount * \
+            action_max.sum() - source_max.sum()
         self.reward_shape = 0
-        action_max_sum = sum(action_max)
-        source_max_sum = sum(source_max)
-        delta = r_sum + self.discount*action_max_sum - source_max_sum
         # update Eligibility Trace
         self.Trace *= self.discount_trace
         for i in range(num_rewards):
