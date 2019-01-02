@@ -1,10 +1,10 @@
 InitQ = 0    # inital value of Q table
 InitP = 0
-IsDrop = False
+IsDrop = True
 Gamma = 0.99
 Lambda = 2   # packets per TimeSlot
 Discount = 0.99  # discount factor
-DiscountTrace = 0  # discount factor of eligibity trace
+DiscountTrace = 0.6  # discount factor of eligibity trace
 DropPenalty = 0
 TimeSlot = 1  # th eduratoin of one time slot
 TransTime = 1  # transmission delay
