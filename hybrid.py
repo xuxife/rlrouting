@@ -6,8 +6,8 @@ from config import *
 
 
 class HybridQ:
-    def __init__(self, network, initQ=InitQ, initP=InitP, gamma=Gamma):
-        self.gamma = Gamma
+    def __init__(self, network, initQ=InitQ, initP=InitP, discount=Discount):
+        self.discount = discount
         self.nw, self.links = network, network.links
         node_num = len(self.links)
         self.neibor_num = np.array([len(self.links[i])
@@ -40,9 +40,9 @@ class HybridQ:
             action_index = self.links[source].index(action)
             old_Q_score = self.Qtable[source][dest][action_index]
             self.Qtable[source][dest][action_index] += lrq * \
-                (-q-t + self.gamma*action_max - old_Q_score)
+                (-q-t + self.discount*action_max - old_Q_score)
             delta = lrp *\
-                (-q-t + self.gamma*action_max - source_max) * \
+                (-q-t + self.discount*action_max - source_max) * \
                 self.gradient(source, dest, action)
             expTheta = np.exp(self.Theta[source]
                               [dest][:self.neibor_num[source]])
