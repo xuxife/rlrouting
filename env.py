@@ -132,7 +132,7 @@ class Node:
         i = 0
         while i < len(self.queue):
             choice = self.agent.choose(self.ID, self.queue[i].dest)
-            if len(self.sent[choice]) < BandwidthLimit:
+            if len(self.sent[choice]) <= BandwidthLimit:
                 p = self.queue.pop(i)
                 logging.debug("{}: {} sends {} to {}".format(
                     self.clock, self.ID, p, choice))
@@ -199,12 +199,17 @@ class Network:
         for node in self.nodes.values():
             node.agent = agent
 
-    def train(self, steps, lambd=Lambda, duration=TimeSlot, lrq=LearnRateQ, lrp=LearnRateP):
-        route_time, drop_rate = np.zeros(steps), np.zeros(steps)
-        for i in range(steps):
-            r = self.step(lambd=lambd, duration=duration)
-            if r is not None:
-                self.agent.learn(r, lrq=lrq, lrp=lrp)
+    def train(self, duration, lambd=Lambda, slots=SlotsInOneSecond, lrq=LearnRateQ, lrp=LearnRateP):
+        assert isinstance(duration, int), "duration for training is an integer"
+        route_time, drop_rate = np.zeros(duration), np.zeros(duration)
+        for i in range(duration):
+            for j in range(slots):
+                if j > 0:
+                    r = self.step(1.0/slots, lambd=0)
+                else:
+                    r = self.step(1.0/slots, lambd=lambd)
+                if r is not None:
+                    self.agent.learn(r, lrq=lrq, lrp=lrp)
             route_time[i] = self.ave_route_time
             drop_rate[i] = self.drop_rate
         return route_time, drop_rate
@@ -226,7 +231,7 @@ class Network:
             for neibor in node.sent:
                 node.sent[neibor] = []
 
-    def step(self, duration=TimeSlot, lambd=Lambda):
+    def step(self, duration, lambd=Lambda):
         """ step runs the whole network forward.
 
         Args:
