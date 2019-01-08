@@ -47,5 +47,5 @@ class MaHybridQ(HybridQ):
         # Update Theta
         self.Theta += lrp * delta * self.Trace
 
-    def drop_penalty(self, event):
-        self.reward_shape += DropPenalty
+    def drop_penalty(self, event, penalty=DropPenalty):
+        self.reward_shape += penalty

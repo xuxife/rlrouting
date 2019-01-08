@@ -10,7 +10,7 @@ InitQ = 0    # inital value of Q table
 InitP = 0
 Discount = 0.99  # discount factor
 DiscountTrace = 0.6  # discount factor of eligibity trace
-DropPenalty = 0  # the penalty of dropping a packet
+DropPenalty = -10  # the penalty of dropping a packet
 
 LearnRateQ = 0.1
 LearnRateP = 0.1
