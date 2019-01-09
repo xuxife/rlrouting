@@ -199,17 +199,17 @@ class Network:
         for node in self.nodes.values():
             node.agent = agent
 
-    def train(self, duration, lambd=Lambda, slots=SlotsInOneSecond, lrq=LearnRateQ, lrp=LearnRateP):
-        assert isinstance(duration, int), "duration for training is an integer"
-        route_time, drop_rate = np.zeros(duration), np.zeros(duration)
-        for i in range(duration):
-            for j in range(slots):
-                if j > 0:
-                    r = self.step(1.0/slots, lambd=0)
-                else:
-                    r = self.step(1.0/slots, lambd=lambd)
-                if r is not None:
-                    self.agent.learn(r, lrq=lrq, lrp=lrp)
+    def train(self, duration, lambd=Lambda, slot=SlotTime, lrq=LearnRateQ, lrp=LearnRateP):
+        """ duration (second) is the length of running period
+            slot (second) is the length of one time slot
+            lambd (second^(-1)) is the Poisson parameter
+        """
+        step_num = int(duration / slot)
+        route_time, drop_rate = np.zeros(step_num), np.zeros(step_num)
+        for i in range(step_num):
+            r = self.step(slot, lambd=lambd*slot)
+            if r is not None:
+                self.agent.learn(r, lrq=lrq, lrp=lrp)
             route_time[i] = self.ave_route_time
             drop_rate[i] = self.drop_rate
         return route_time, drop_rate
