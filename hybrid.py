@@ -65,3 +65,6 @@ class HybridQ:
 
     def drop_penalty(self, event):
         pass
+
+    def __repr__(self):
+        return "<HybridQ discount:{}>".format(self.discount)

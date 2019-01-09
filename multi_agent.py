@@ -49,3 +49,6 @@ class MaHybridQ(HybridQ):
 
     def drop_penalty(self, event, penalty=DropPenalty):
         self.reward_shape += penalty
+
+    def __repr__(self):
+        return "<MultiAgent discount:{} discount_trace:{}>".format(self.discount, self.discount_trace)
