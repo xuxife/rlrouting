@@ -199,7 +199,7 @@ class Network:
         for node in self.nodes.values():
             node.agent = agent
 
-    def train(self, duration, lambd=Lambda, slot=SlotTime, lrq=LearnRateQ, lrp=LearnRateP):
+    def train(self, duration, lambd=Lambda, slot=SlotTime, lrq=LearnRateQ, lrp=LearnRateP, penalty=DropPenalty):
         """ duration (second) is the length of running period
             slot (second) is the length of one time slot
             lambd (second^(-1)) is the Poisson parameter
@@ -207,7 +207,7 @@ class Network:
         step_num = int(duration / slot)
         route_time, drop_rate = np.zeros(step_num), np.zeros(step_num)
         for i in range(step_num):
-            r = self.step(slot, lambd=lambd*slot)
+            r = self.step(slot, lambd=lambd*slot, penalty=penalty)
             if r is not None:
                 self.agent.learn(r, lrq=lrq, lrp=lrp)
             route_time[i] = self.ave_route_time
@@ -231,7 +231,7 @@ class Network:
             for neibor in node.sent:
                 node.sent[neibor] = []
 
-    def step(self, duration, lambd=Lambda):
+    def step(self, duration, lambd=Lambda, penalty=DropPenalty):
         """ step runs the whole network forward.
 
         Args:
@@ -260,7 +260,7 @@ class Network:
                 self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
                 self.drop_packets += 1
                 self.active_packets -= 1
-                self.agent.drop_penalty(e)
+                self.agent.drop_penalty(e, penalty=penalty)
             elif self.event_queue[i].arrive_time <= self.clock + duration:
                 e = self.event_queue.pop(i)
                 self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
