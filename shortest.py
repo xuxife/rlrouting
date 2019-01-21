@@ -1,4 +1,5 @@
 import numpy as np
+from env import *
 
 
 class Shortest:
@@ -37,5 +38,5 @@ class Shortest:
     def get_reward(self, source, dest, action):
         pass
 
-    def drop_penalty(self, event):
+    def drop_penalty(self, event, penalty=DropPenalty):
         pass

@@ -44,5 +44,5 @@ class Qroute:
         with open(filename, "wb") as f:
             pickle.dump(self, f)
 
-    def drop_penalty(self, event):
+    def drop_penalty(self, event, penalty=DropPenalty):
         pass
