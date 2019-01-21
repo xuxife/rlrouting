@@ -52,3 +52,6 @@ class MaHybridQ(HybridQ):
 
     def __repr__(self):
         return "<MultiAgent discount:{} discount_trace:{}>".format(self.discount, self.discount_trace)
+
+    def clean_trace(self):
+        self.Trace = np.zeros(self.Qtable.shape)
