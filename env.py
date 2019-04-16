@@ -101,24 +101,22 @@ class Node:
     def __repr__(self):
         return "Node<{}, queue: {}, sent: {}>".format(self.ID, self.queue, self.sent)
 
+    def arrive(self, packet):
+        logging.debug("{}: {} ends in {}".format(
+            self.clock, packet, self.ID))
+        self.network.active_packets -= 1
+        self.network.end_packets += 1
+        self.network.route_time += self.clock - packet.birth
+        self.network.hops += packet.hops
+
     def receive(self, packet):
         """ Receive a packet.
         Update statistic attritubes if this packet ends here, else append the packet into queue.
         """
         packet.current = self.ID
         logging.debug("{}: {} receives {}".format(self.clock, self.ID, packet))
-
-        if packet.dest == self.ID:  # when the packet arrives its destination
-            logging.debug("{}: {} ends in {}".format(
-                self.clock, packet, self.ID))
-            self.network.active_packets -= 1
-            self.network.end_packets += 1
-            self.network.route_time += self.clock - packet.birth
-            self.network.hops += packet.hops
-            del packet
-        else:
-            packet.start_queue = self.clock
-            self.queue.append(packet)
+        packet.start_queue = self.clock
+        self.queue.append(packet)
 
     def send(self):
         """ Send a packet ordered by queue.
@@ -127,10 +125,13 @@ class Node:
 
         Returns:
             Reward: Reward of this action.
-            None if no packet is sent.
+            None if no packet is sent or the packet ends here.
         """
         i = 0
         while i < len(self.queue):
+            if self.queue[i].dest == self.ID:
+                self.arrive(self.queue.pop(i))
+                return None
             choice = self.agent.choose(self.ID, self.queue[i].dest)
             if len(self.sent[choice]) <= BandwidthLimit:
                 p = self.queue.pop(i)
