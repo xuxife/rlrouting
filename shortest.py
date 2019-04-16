@@ -41,3 +41,22 @@ class Shortest:
 
     def drop_penalty(self, event, penalty=DropPenalty):
         pass
+
+
+class GlobalRoute(Shortest):
+    def dijkstra(self):
+        changing = True
+        while changing:
+            changing = False
+            for source, neibors in self.nw.links.items():
+                for dest in self.nw.nodes:
+                    for neibor in neibors:
+                        neibor_dis = self.distance[neibor][dest] + \
+                            1 + len(self.nw.nodes[neibor].queue)
+                        if self.distance[source][dest] > neibor_dis:
+                            self.distance[source][dest] = neibor_dis
+                            self.choice[source][dest] = neibor
+                            changing = True
+
+    def learn(self, reward, lrq=0, lrp=0):
+        self.dijkstra()
