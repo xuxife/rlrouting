@@ -31,8 +31,6 @@ class Packet:
         self.queue_time = 0
         self.trans_time = 0
 
-        self.history = []  # (node_ID, queue_time, trans_time)
-
     def __repr__(self):
         return "Packet<{}->{}>".format(self.source, self.dest)
 
@@ -141,26 +139,10 @@ class Node:
                 p.hops += 1
                 p.queue_time = self.clock - p.start_queue
                 p.trans_time = TransTime  # set the transmission delay
-
-                if self.network.IsTrace:
-                    p.history.append((self.ID, p.queue_time, p.trans_time, self.agent.get_reward(
-                        self.ID, p.dest, choice)))
-                    if choice == p.dest:
-                        reward = Reward(self.ID, p, choice, p.history)
-                        logging.debug("{}: {} returns reward {}".format(
-                            self.clock, self.ID, reward))
-                    else:
-                        reward = None
-                else:
-                    reward = Reward(self.ID, p, choice, self.agent.get_reward(
-                        self.ID, p.dest, choice))
-                    logging.debug("{}: {} returns reward {}".format(
-                        self.clock, self.ID, reward))
-
                 self.network.event_queue.append(
                     Event(p, self.ID, choice, self.clock+p.trans_time))
                 self.sent[choice].append(p)
-                return reward
+                return Reward(self.ID, p, choice, self.agent.get_reward(self.ID, p.dest, choice))
             else:
                 i += 1
         return None
@@ -190,8 +172,6 @@ class Network:
         self.links = OrderedDict()
         self.agent = None
 
-        self.IsTrace = False
-
         self.clean()
 
         self.read_network(file)
@@ -216,7 +196,6 @@ class Network:
     def bind(self, agent):
         """ bind the given agent to every node """
         self.agent = agent
-        self.agent.nw = self
         for node in self.nodes.values():
             node.agent = agent
 
@@ -279,8 +258,6 @@ class Network:
                 # drop the packet if too many hops
                 e = self.event_queue.pop(i)
                 self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
-                logging.debug("{}: {} in Node {} is dropped.".format(
-                    self.clock, e.packet, e.from_node))
                 self.drop_packets += 1
                 self.active_packets -= 1
                 self.agent.drop_penalty(e, penalty=penalty)
