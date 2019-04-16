@@ -11,10 +11,6 @@ class Shortest:
         self.distance = np.full((node_num, node_num), np.inf)
         np.fill_diagonal(self.distance, 0)
         self.choice = np.zeros((node_num, node_num), dtype=np.int)
-        for node, neibors in network.links.items():
-            for neibor in neibors:
-                self.distance[node][neibor] = 1
-                self.choice[node][neibor] = neibor
         self.dijkstra()
 
     def dijkstra(self):
@@ -59,4 +55,7 @@ class GlobalRoute(Shortest):
                             changing = True
 
     def learn(self, reward, lrq=0, lrp=0):
+        self.distance.fill(np.inf)
+        np.fill_diagonal(self.distance, 0)
+        self.choice.fill(0)
         self.dijkstra()
