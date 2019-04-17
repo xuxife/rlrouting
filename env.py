@@ -10,20 +10,17 @@ class Packet:
 
     Args:
         source, dest (int): The start/end nodes' ID.
-        birth (int, time): When the packet is generated.
+        birth (int): When the packet is generated.
 
     Attritubes:
-        event (Event): The current event of this packet.
-        start_queue (int, time): When the queuing started.
-        queue_time/trans_time (int, time): Queuing time/Transportation time.
-        hops (int): The number of hop (one hop is a jump from node to node).
-        route_time (int, time): The duration from birth to end.
+        start_queue (int): When the queuing started.
+        queue_time/trans_time (int): Queuing time/Transmission time.
+        hops (int): The number of hops (one hop is a jump from node to node).
     """
 
     def __init__(self, source, dest, birth):
         self.source = source
         self.dest = dest
-        self.current = source
         self.birth = birth
 
         self.hops = 0
@@ -60,8 +57,8 @@ class Reward:
 
     Attributes:
         source, dest (int): Where the packet from/destination
-        action (int): Which neibor the last node chose
-        queue/trans_time (int, time): The time cost on queue/transmission on the last node/connection
+        action (int): Which neighbor the last node chose
+        queue/trans_time (int): The time cost on queue/transmission on the last node/connection
         agent_info (:obj:): Extra information from agent.get_reward
     """
 
@@ -82,10 +79,8 @@ class Node:
     """ Node is the unit actor in a network.
 
     Attributes:
-        queue (list): Where Packets waiting for being delivered,
-        sent  (dict): An pesudo stage where Packets already sent but not arrive the next node.
-
-        end_packets (list): All packets end in this node.
+        queue (List[Packet]): Where Packets waiting for being delivered,
+        sent  (Dict[int, Packet]): An pesudo stage where Packets already sent but not arrive the next node.
     """
 
     def __init__(self, ID, clock, network):
@@ -95,8 +90,8 @@ class Node:
         self.sent = {}
         self.network = network
 
-    def link(self, neibor):
-        self.sent[neibor] = []
+    def link(self, neighbor):
+        self.sent[neighbor] = []
 
     def __repr__(self):
         return "Node<{}, queue: {}, sent: {}>".format(self.ID, self.queue, self.sent)
@@ -110,10 +105,7 @@ class Node:
         self.network.hops += packet.hops
 
     def receive(self, packet):
-        """ Receive a packet.
-        Update statistic attritubes if this packet ends here, else append the packet into queue.
-        """
-        packet.current = self.ID
+        """ Receive a packet. """
         logging.debug("{}: {} receives {}".format(self.clock, self.ID, packet))
         packet.start_queue = self.clock
         self.queue.append(packet)
@@ -156,15 +148,13 @@ class Network:
         file (string): The name of network file.
 
     Attributes:
-        clock (int, time): The simulation time.
-        nodes (list): nodes
-        links (list): lists of connected nodes' ID.
+        clock (int): The simulation time.
+        nodes (Dict[Int, Node]): An ordered dictionary of all nodes in this network.
+        links (Dict[Int, List[Int]]): lists of connected nodes' ID.
 
-        event_queue (list): A queue of following happen events.
-        rewards     (list): A list of rewards after call step function.
-
-        active_packets (list): The packets are still active in the network.
-        end_packets    (list): The packets already ends in its destination.
+        event_queue (List[Event]): A queue of following happen events.
+        end_packets (int): The packets already ends in its destination.
+        route_time (int): The total routing time of all ended packets.
     """
 
     def __init__(self, file):
@@ -200,19 +190,32 @@ class Network:
         for node in self.nodes.values():
             node.agent = agent
 
-    def train(self, duration, lambd=Lambda, slot=SlotTime, lrq=LearnRateQ, lrp=LearnRateP, penalty=DropPenalty):
-        """ duration (second) is the length of running period
-            slot (second) is the length of one time slot
-            lambd (second^(-1)) is the Poisson parameter
+    def train(self, duration, lambd=Lambda, slot=SlotTime, lrq=LearnRateQ, lrp=LearnRateP, penalty=DropPenalty, droprate=False):
+        """ run `duration` steps in given lambda (poisson)
+
+        Args:
+            duration (second) : the length of running period
+            lambd (second^(-1)) : the Poisson parameter
+            slot (second) : the length of one time slot
+            lrq/lrp (float): learning rate for Qtable or policy-table
+            penalty (float): drop penalty
+            droprate (bool): whether return droprate or not
+
+        Returns:
+            route_time (List[Real]): the vector of routing time in this training duration.
+            drop_rate (List[Real]): the vector of packet-drop rate in this train.
         """
         step_num = int(duration / slot)
-        route_time, drop_rate = np.zeros(step_num), np.zeros(step_num)
+        route_time = np.zeros(step_num)
+        if droprate:
+            drop_rate = np.zeros(step_num)
         for i in range(step_num):
             r = self.step(slot, lambd=lambd*slot, penalty=penalty)
             if r is not None:
                 self.agent.learn(r, lrq=lrq, lrp=lrp)
             route_time[i] = self.ave_route_time
-            drop_rate[i] = self.drop_rate
+            if droprate:
+                drop_rate[i] = self.drop_rate
         return route_time, drop_rate
 
     def clean(self):
@@ -229,8 +232,8 @@ class Network:
         for node in self.nodes.values():
             node.clock = self.clock
             node.queue = []
-            for neibor in node.sent:
-                node.sent[neibor] = []
+            for neighbor in node.sent:
+                node.sent[neighbor] = []
 
     def step(self, duration, lambd=Lambda, penalty=DropPenalty):
         """ step runs the whole network forward.
@@ -240,10 +243,9 @@ class Network:
             lambd    (int, float)   : The Poisson parameter (lambda) of this step.
 
         Returns:
-            list: A list of rewards from sending events happended in the timeslot.
+            List[Reward]: A list of rewards from sending events happended in the timeslot.
         """
-        packets = self.new_packet(lambd)
-        for p in packets:
+        for p in self.new_packet(lambd):
             self.inject(p)
 
         rewards = []
