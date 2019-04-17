@@ -75,6 +75,14 @@ class Reward:
             self.source, self.dest, self.action, self.queue_time, self.trans_time)
 
 
+class Clock:
+    def __init__(self, now):
+        self.t = now
+
+    def __repr__(self):
+        return str(self.t)
+
+
 class Node:
     """ Node is the unit actor in a network.
 
@@ -101,13 +109,13 @@ class Node:
             self.clock, packet, self.ID))
         self.network.active_packets -= 1
         self.network.end_packets += 1
-        self.network.route_time += self.clock - packet.birth
+        self.network.route_time += self.clock.t - packet.birth
         self.network.hops += packet.hops
 
     def receive(self, packet):
         """ Receive a packet. """
         logging.debug("{}: {} receives {}".format(self.clock, self.ID, packet))
-        packet.start_queue = self.clock
+        packet.start_queue = self.clock.t
         self.queue.append(packet)
 
     def send(self):
@@ -130,10 +138,10 @@ class Node:
                 logging.debug("{}: {} sends {} to {}".format(
                     self.clock, self.ID, p, choice))
                 p.hops += 1
-                p.queue_time = self.clock - p.start_queue
+                p.queue_time = self.clock.t - p.start_queue
                 p.trans_time = TransTime  # set the transmission delay
                 self.network.event_queue.append(
-                    Event(p, self.ID, choice, self.clock+p.trans_time))
+                    Event(p, self.ID, choice, self.clock.t+p.trans_time))
                 self.sent[choice].append(p)
                 return Reward(self.ID, p, choice, self.agent.get_reward(self.ID, p.dest, choice))
             else:
@@ -148,12 +156,16 @@ class Network:
         file (string): The name of network file.
 
     Attributes:
-        clock (int): The simulation time.
+        clock (Clock): The simulation time.
         nodes (Dict[Int, Node]): An ordered dictionary of all nodes in this network.
         links (Dict[Int, List[Int]]): lists of connected nodes' ID.
-
+        agent (:obj:): bind an agent object who has methods `choose`, `learn`
         event_queue (List[Event]): A queue of following happen events.
+        all_packets (int): The total number of packets in this simulation.
         end_packets (int): The packets already ends in its destination.
+        drop_packets (int): The number of dropped packets
+        active_packets (int): The number of active packets
+        hops (int): The number of total hops of all packets
         route_time (int): The total routing time of all ended packets.
     """
 
@@ -216,17 +228,19 @@ class Network:
             route_time[i] = self.ave_route_time
             if droprate:
                 drop_rate[i] = self.drop_rate
-        return route_time, drop_rate
+        if droprate:
+            return route_time, drop_rate
+        else:
+            return route_time
 
     def clean(self):
         """ reset the network attritubes """
-        self.clock = 0
+        self.clock = Clock(0)
         self.event_queue = []
         self.all_packets = 0
         self.end_packets = 0
-        self.drop_packets = 0  # the number of packets dropped in the last step
+        self.drop_packets = 0
         self.active_packets = 0
-        self.total_drop_packet = 0
         self.hops = 0
         self.route_time = 0
         for node in self.nodes.values():
@@ -249,7 +263,7 @@ class Network:
             self.inject(p)
 
         rewards = []
-        self.broadcast()
+        # self.broadcast()
         for node in self.nodes.values():
             reward = node.send()
             if reward is not None:
@@ -264,16 +278,14 @@ class Network:
                 self.drop_packets += 1
                 self.active_packets -= 1
                 self.agent.drop_penalty(e, penalty=penalty)
-            elif self.event_queue[i].arrive_time <= self.clock + duration:
+            elif self.event_queue[i].arrive_time <= self.clock.t + duration:
                 e = self.event_queue.pop(i)
                 self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
-                self.nodes[e.to_node].clock = e.arrive_time
                 self.nodes[e.to_node].receive(e.packet)
             else:
                 i += 1
 
-        self.clock += duration
-        self.broadcast()
+        self.clock.t += duration
         return rewards
 
     def new_packet(self, lambd):
@@ -292,7 +304,7 @@ class Network:
             dest = np.random.choice(nodes_id)
             while dest == source:
                 dest = np.random.choice(nodes_id)
-            packets.append(Packet(source, dest, self.clock))
+            packets.append(Packet(source, dest, self.clock.t))
         return packets
 
     def inject(self, packet):
@@ -300,11 +312,6 @@ class Network:
         self.all_packets += 1
         self.active_packets += 1
         self.nodes[packet.source].receive(packet)
-
-    def broadcast(self):
-        """ Broadcast the network clock to nodes """
-        for node in self.nodes.values():
-            node.clock = self.clock
 
     @property
     def ave_hops(self):
