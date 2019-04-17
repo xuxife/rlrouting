@@ -3,7 +3,7 @@ from config import *
 
 
 class Policy:
-    attr = []
+    attrs = []
 
     def choose(self, source, dest):
         pass

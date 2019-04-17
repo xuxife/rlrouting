@@ -1,11 +1,13 @@
 import numpy as np
 import logging
 from collections import OrderedDict
+from dataclasses import dataclass
 
 from base_policy import *
 from config import *
 
 
+@dataclass
 class Packet:
     """ Packet is an abstract packet.
 
@@ -18,21 +20,19 @@ class Packet:
         queue_time/trans_time (int): Queuing time/Transmission time.
         hops (int): The number of hops (one hop is a jump from node to node).
     """
-
-    def __init__(self, source, dest, birth):
-        self.source = source
-        self.dest = dest
-        self.birth = birth
-
-        self.hops = 0
-        self.start_queue = 0
-        self.queue_time = 0
-        self.trans_time = 0
+    source: int
+    dest: int
+    birth: int
+    hops: int = 0
+    start_queue: int = 0
+    queue_time: int = 0
+    trans_time: int = 0
 
     def __repr__(self):
         return f"Packet<{self.source}->{self.dest}>"
 
 
+@dataclass
 class Event:
     """ Event records a packet passing through a connection.
 
@@ -42,12 +42,10 @@ class Event:
         to_node     (int)   : Where the delivery ends, the destination.
         arrive_time (int)   : When the corresponding packet would arrive to_node.
     """
-
-    def __init__(self, packet, from_node, to_node, arrive_time):
-        self.packet = packet
-        self.from_node = from_node
-        self.to_node = to_node
-        self.arrive_time = arrive_time
+    packet: Packet
+    from_node: int
+    to_node: int
+    arrive_time: int
 
     def __repr__(self):
         return f"Event<{self.from_node}->{self.to_node} at {self.arrive_time}>"
@@ -144,7 +142,7 @@ class Node:
                 self.network.event_queue.append(
                     Event(p, self.ID, choice, self.clock.t+p.trans_time))
                 self.sent[choice] += 1
-                agent_info = self.agent.get_reward(self.ID, p.dest, choice)
+                agent_info = self.agent.get_reward(self.ID, choice, p)
                 if self.network.dual:
                     agent_info['qx'] = len(self.queue)
                     agent_info['qy'] = len(self.network.nodes[choice].queue)
@@ -225,14 +223,14 @@ class Network:
         for node in self.nodes.values():
             node.agent = agent
 
-    def train(self, duration, lambd=Lambda, slot=SlotTime, lrq=LearnRateQ, lrp=LearnRateP, penalty=DropPenalty, droprate=False):
+    def train(self, duration, lambd=Lambda, slot=SlotTime, lr={'q': LearnRateQ, 'p': LearnRateP}, penalty=DropPenalty, droprate=False):
         """ run `duration` steps in given lambda (poisson)
 
         Args:
             duration (second) : the length of running period
             lambd (second^(-1)) : the Poisson parameter
             slot (second) : the length of one time slot
-            lrq/lrp (float): learning rate for Qtable or policy-table
+            lr (Dict[str, float]): learning rate for Qtable or policy-table
             penalty (float): drop penalty
             droprate (bool): whether return droprate or not
 
@@ -247,7 +245,7 @@ class Network:
         for i in range(step_num):
             r = self.step(slot, lambd=lambd*slot, penalty=penalty)
             if r is not None:
-                self.agent.learn(r, lrq=lrq, lrp=lrp)
+                self.agent.learn(r, lr=lr)
             route_time[i] = self.ave_route_time
             if droprate:
                 drop_rate[i] = self.drop_rate
