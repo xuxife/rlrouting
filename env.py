@@ -2,6 +2,7 @@ import numpy as np
 import logging
 from collections import OrderedDict
 
+from base_policy import *
 from config import *
 
 
@@ -29,7 +30,7 @@ class Packet:
         self.trans_time = 0
 
     def __repr__(self):
-        return "Packet<{}->{}>".format(self.source, self.dest)
+        return f"Packet<{self.source}->{self.dest}>"
 
 
 class Event:
@@ -49,7 +50,10 @@ class Event:
         self.arrive_time = arrive_time
 
     def __repr__(self):
-        return "Event<{}->{} at {}>".format(self.from_node, self.to_node, self.arrive_time)
+        return f"Event<{self.from_node}->{self.to_node} at {self.arrive_time}>"
+
+    def __lt__(self, other):
+        return self.arrive_time < other.arrive_time
 
 
 class Reward:
@@ -58,7 +62,6 @@ class Reward:
     Attributes:
         source, dest (int): Where the packet from/destination
         action (int): Which neighbor the last node chose
-        queue/trans_time (int): The time cost on queue/transmission on the last node/connection
         agent_info (:obj:): Extra information from agent.get_reward
     """
 
@@ -71,15 +74,14 @@ class Reward:
         self.agent_info = agent_info  # extra information defined by agents
 
     def __repr__(self):
-        return "Reward<{}->{} by {}|queue: {}, trans: {}>".format(
-            self.source, self.dest, self.action, self.queue_time, self.trans_time)
+        return f"Reward<{self.source}->{self.dest} by {self.action}>"
 
 
 class Clock:
     def __init__(self, now):
         self.t = now
 
-    def __repr__(self):
+    def __str__(self):
         return str(self.t)
 
 
@@ -97,24 +99,22 @@ class Node:
         self.queue = []
         self.sent = {}
         self.network = network
-
-    def link(self, neighbor):
-        self.sent[neighbor] = []
+        self.agent = Policy()
 
     def __repr__(self):
-        return "Node<{}, queue: {}, sent: {}>".format(self.ID, self.queue, self.sent)
+        return f"Node<{self.ID}, queue: {self.queue}, sent: {self.sent}>"
 
     def arrive(self, packet):
-        logging.debug("{}: {} ends in {}".format(
-            self.clock, packet, self.ID))
+        logging.debug(f"{self.clock}: {packet} ends in {self.ID}")
         self.network.active_packets -= 1
         self.network.end_packets += 1
         self.network.route_time += self.clock.t - packet.birth
         self.network.hops += packet.hops
+        del packet
 
     def receive(self, packet):
         """ Receive a packet. """
-        logging.debug("{}: {} receives {}".format(self.clock, self.ID, packet))
+        logging.debug(f"{self.clock}: {self.ID} receives {packet}")
         packet.start_queue = self.clock.t
         self.queue.append(packet)
 
@@ -129,11 +129,12 @@ class Node:
         """
         i = 0
         while i < len(self.queue):
-            if self.queue[i].dest == self.ID:
+            dest = self.queue[i].dest
+            if dest == self.ID:
                 self.arrive(self.queue.pop(i))
                 return None
-            choice = self.agent.choose(self.ID, self.queue[i].dest)
-            if len(self.sent[choice]) <= BandwidthLimit:
+            choice = self.agent.choose(self.ID, dest)
+            if self.sent[choice] <= BandwidthLimit:
                 p = self.queue.pop(i)
                 logging.debug("{}: {} sends {} to {}".format(
                     self.clock, self.ID, p, choice))
@@ -142,8 +143,12 @@ class Node:
                 p.trans_time = TransTime  # set the transmission delay
                 self.network.event_queue.append(
                     Event(p, self.ID, choice, self.clock.t+p.trans_time))
-                self.sent[choice].append(p)
-                return Reward(self.ID, p, choice, self.agent.get_reward(self.ID, p.dest, choice))
+                self.sent[choice] += 1
+                agent_info = self.agent.get_reward(self.ID, p.dest, choice)
+                if self.network.dual:
+                    agent_info['qx'] = len(self.queue)
+                    agent_info['qy'] = len(self.network.nodes[choice].queue)
+                return Reward(self.ID, p, choice, agent_info)
             else:
                 i += 1
         return None
@@ -154,6 +159,7 @@ class Network:
 
     Args:
         file (string): The name of network file.
+        dual (bool): whether the network runs in DUAL mode. (for DRQ & CDRQ)
 
     Attributes:
         clock (Clock): The simulation time.
@@ -169,15 +175,32 @@ class Network:
         route_time (int): The total routing time of all ended packets.
     """
 
-    def __init__(self, file):
+    def __init__(self, file, dual=False):
         self.project = {}  # project from file identity to node ID
         self.nodes = OrderedDict()
         self.links = OrderedDict()
-        self.agent = None
+        self.agent = Policy()
+        self.dual = dual
 
         self.clean()
 
         self.read_network(file)
+
+    def clean(self):
+        """ reset the network attritubes """
+        self.clock = Clock(0)
+        self.event_queue = []
+        self.all_packets = 0
+        self.end_packets = 0
+        self.drop_packets = 0
+        self.active_packets = 0
+        self.hops = 0
+        self.route_time = 0
+        for node in self.nodes.values():
+            node.clock = self.clock
+            node.queue = []
+            for neighbor in node.sent:
+                node.sent[neighbor] = 0
 
     def read_network(self, file):
         with open(file, 'r') as f:
@@ -191,8 +214,8 @@ class Network:
                 ID += 1
             elif l[0] == "2000":
                 source, dest = self.project[l[1]], self.project[l[2]]
-                self.nodes[source].link(dest)
-                self.nodes[dest].link(source)
+                self.nodes[source].sent[dest] = 0
+                self.nodes[dest].sent[source] = 0
                 self.links[source].append(dest)
                 self.links[dest].append(source)
 
@@ -228,26 +251,7 @@ class Network:
             route_time[i] = self.ave_route_time
             if droprate:
                 drop_rate[i] = self.drop_rate
-        if droprate:
-            return route_time, drop_rate
-        else:
-            return route_time
-
-    def clean(self):
-        """ reset the network attritubes """
-        self.clock = Clock(0)
-        self.event_queue = []
-        self.all_packets = 0
-        self.end_packets = 0
-        self.drop_packets = 0
-        self.active_packets = 0
-        self.hops = 0
-        self.route_time = 0
-        for node in self.nodes.values():
-            node.clock = self.clock
-            node.queue = []
-            for neighbor in node.sent:
-                node.sent[neighbor] = []
+        return (route_time, drop_rate) if droprate else route_time
 
     def step(self, duration, lambd=Lambda, penalty=DropPenalty):
         """ step runs the whole network forward.
@@ -263,7 +267,6 @@ class Network:
             self.inject(p)
 
         rewards = []
-        # self.broadcast()
         for node in self.nodes.values():
             reward = node.send()
             if reward is not None:
@@ -274,13 +277,13 @@ class Network:
             if IsDrop and self.event_queue[i].packet.hops >= len(self.nodes):
                 # drop the packet if too many hops
                 e = self.event_queue.pop(i)
-                self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
+                self.nodes[e.from_node].sent[e.to_node] -= 1
                 self.drop_packets += 1
                 self.active_packets -= 1
                 self.agent.drop_penalty(e, penalty=penalty)
             elif self.event_queue[i].arrive_time <= self.clock.t + duration:
                 e = self.event_queue.pop(i)
-                self.nodes[e.from_node].sent[e.to_node].remove(e.packet)
+                self.nodes[e.from_node].sent[e.to_node] -= 1
                 self.nodes[e.to_node].receive(e.packet)
             else:
                 i += 1
@@ -334,7 +337,7 @@ def print6x6(network):
             print("│No.{:2d}│".format(6*i+j), end="")
             if 6*i+j+1 in network.links[6*i+j]:
                 print(" {:2d}├ ".format(
-                    len(network.nodes[6*i+j].sent[6*i+j+1])), end="")
+                    network.nodes[6*i+j].sent[6*i+j+1]), end="")
             else:
                 print(" "*5, end="")
         print("│No.{:2d}│".format(6*i+5))
@@ -342,7 +345,7 @@ def print6x6(network):
             print("│{:5d}│".format(len(network.nodes[6*i+j].queue)), end="")
             if 6*i+j in network.links[6*i+j+1]:
                 print(" ┤{:<2d} ".format(
-                    len(network.nodes[6*i+j+1].sent[6*i+j])), end="")
+                    network.nodes[6*i+j+1].sent[6*i+j]), end="")
             else:
                 print(" "*5, end="")
         print("│{:5d}│".format(len(network.nodes[6*i+5].queue)))
@@ -352,8 +355,8 @@ def print6x6(network):
             break
         for j in range(6):
             if 6*i+j in network.links[6*i+j+6]:
-                print("{:2d}┴ ┬{:<2d}     ".format(len(
-                    network.nodes[6*i+j+6].sent[6*i+j]), len(network.nodes[6*i+j].sent[6*i+j+6])), end="")
+                print("{:2d}┴ ┬{:<2d}     ".format(
+                    network.nodes[6*i+j+6].sent[6*i+j], network.nodes[6*i+j].sent[6*i+j+6]), end="")
             else:
                 print(" "*12, end="")
         print()
