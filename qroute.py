@@ -15,8 +15,7 @@ class Qroute(Policy):
     def __init__(self, network, initQ=InitQ):
         self.links = network.links
         self.Qtable = {source:
-                       {dest: InitQ * np.ones(len(neighbors))
-                        for dest in self.links.keys()}
+                       np.ones((len(self.links), len(neighbors)))
                        for source, neighbors in self.links.items()}
 
     def choose(self, source, dest):
