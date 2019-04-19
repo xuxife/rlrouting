@@ -23,5 +23,5 @@ class Policy:
             for k, v in pickle.load(f).items():
                 self.__dict__[k] = v
 
-    def drop_penalty(self, penalty=DropPenalty):
+    def drop_penalty(self, event, penalty=DropPenalty):
         pass
