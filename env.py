@@ -63,10 +63,11 @@ class Reward:
         agent_info (:obj:): Extra information from agent.get_reward
     """
 
-    def __init__(self, source, packet, choice, agent_info):
+    def __init__(self, source, packet, action, agent_info):
         self.source = source
         self.dest = packet.dest
-        self.action = choice
+        self.action = action
+        self.packet = packet
         self.queue_time = packet.queue_time
         self.trans_time = packet.trans_time
         self.agent_info = agent_info  # extra information defined by agents
@@ -131,22 +132,22 @@ class Node:
             if dest == self.ID:
                 self.arrive(self.queue.pop(i))
                 return None
-            choice = self.agent.choose(self.ID, dest)
-            if self.sent[choice] <= BandwidthLimit:
+            action = self.agent.choose(self.ID, dest)
+            if self.sent[action] <= BandwidthLimit:
                 p = self.queue.pop(i)
-                logging.debug("{}: {} sends {} to {}".format(
-                    self.clock, self.ID, p, choice))
+                logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
                 p.hops += 1
                 p.queue_time = self.clock.t - p.start_queue
                 p.trans_time = TransTime  # set the transmission delay
                 self.network.event_queue.append(
-                    Event(p, self.ID, choice, self.clock.t+p.trans_time))
-                self.sent[choice] += 1
-                agent_info = self.agent.get_reward(self.ID, choice, p)
+                    Event(p, self.ID, action, self.clock.t+p.trans_time))
+                self.sent[action] += 1
+                agent_info = self.agent.get_reward(self.ID, action, p)
                 if self.network.dual:
-                    agent_info['qx'] = len(self.queue)
-                    agent_info['qy'] = len(self.network.nodes[choice].queue)
-                return Reward(self.ID, p, choice, agent_info)
+                    agent_info['q_x'] = max(1, len(self.queue))
+                    agent_info['q_y'] = max(
+                        1, len(self.network.nodes[action].queue))
+                return Reward(self.ID, p, action, agent_info)
             else:
                 i += 1
         return None
