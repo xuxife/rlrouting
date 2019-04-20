@@ -35,13 +35,12 @@ class Qroute(Policy):
 
     def learn(self, rewards, lr={'q': LearnRateQ}):
         for reward in rewards:
-            q, t = reward.queue_time, reward.trans_time
             source, dest, action = reward.source, reward.dest, reward.action
             action_max = reward.agent_info['max_Q_y']
             action_index = self.links[source].index(action)
             old_score = self.Qtable[source][dest][action_index]
             self.Qtable[source][dest][action_index] += lr['q'] * \
-                (-q-t + action_max - old_score)
+                (-reward.agent_info['q_y'] + action_max - old_score)
 
 
 class CDRQ(Qroute):
