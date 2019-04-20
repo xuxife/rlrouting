@@ -10,7 +10,7 @@ class Qroute(Policy):
     Attritubes:
         Qtable : Stores the Q scores of all nodes.
     """
-    attrs = ['Qtable']
+    attrs = Policy.attrs + ['Qtable']
 
     def __init__(self, network, initQ=InitQ):
         self.links = network.links
@@ -44,7 +44,7 @@ class Qroute(Policy):
 
 
 class CDRQ(Qroute):
-    attrs = ['Qtable', 'confidence']
+    attrs = Qroute.attrs + ['confidence']
 
     def __init__(self, network, decay=0.9, initQ=InitQ):
         super().__init__(network, initQ)
