@@ -224,7 +224,7 @@ class Network:
         for node in self.nodes.values():
             node.agent = agent
 
-    def train(self, duration, lambd=Lambda, slot=SlotTime, lr={'q': LearnRateQ, 'p': LearnRateP}, penalty=DropPenalty, droprate=False):
+    def train(self, duration, lambd=Lambda, slot=SlotTime, lr={}, penalty=DropPenalty, droprate=False):
         """ run `duration` steps in given lambda (poisson)
 
         Args:
@@ -246,7 +246,10 @@ class Network:
         for i in range(step_num):
             r = self.step(slot, lambd=lambd*slot, penalty=penalty)
             if r is not None:
-                self.agent.learn(r, lr=lr)
+                if lr:
+                    self.agent.learn(r, lr=lr)
+                else:
+                    self.agent.learn(r)
             route_time[i] = self.ave_route_time
             if droprate:
                 drop_rate[i] = self.drop_rate
