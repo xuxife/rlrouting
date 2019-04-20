@@ -114,8 +114,11 @@ class Node:
     def receive(self, packet):
         """ Receive a packet. """
         logging.debug(f"{self.clock}: {self.ID} receives {packet}")
-        packet.start_queue = self.clock.t
-        self.queue.append(packet)
+        if self.ID == packet.dest:
+            self.arrive(packet)
+        else:
+            packet.start_queue = self.clock.t
+            self.queue.append(packet)
 
     def send(self):
         """ Send a packet ordered by queue.
@@ -124,14 +127,11 @@ class Node:
 
         Returns:
             Reward: Reward of this action.
-            None if no packet is sent or the packet ends here.
+            None if no action is taken
         """
         i = 0
         while i < len(self.queue):
             dest = self.queue[i].dest
-            if dest == self.ID:
-                self.arrive(self.queue.pop(i))
-                return None
             action = self.agent.choose(self.ID, dest)
             if self.sent[action] <= BandwidthLimit:
                 p = self.queue.pop(i)
