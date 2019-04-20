@@ -9,9 +9,9 @@ class Policy:
         pass
 
     def get_reward(self, source, dest, action):
-        pass
+        return {}
 
-    def learn(self, rewrads, lr):
+    def learn(self, rewrads, lr={}):
         pass
 
     def store(self, filename):

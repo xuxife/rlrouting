@@ -2,6 +2,7 @@ import numpy as np
 import logging
 from collections import OrderedDict
 from dataclasses import dataclass
+from heapq import *
 
 from base_policy import *
 from config import *
@@ -133,8 +134,8 @@ class Node:
                 logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
                 p.hops += 1
                 p.trans_time = TransTime  # set the transmission delay
-                self.network.event_queue.append(
-                    Event(p, self.ID, action, self.clock.t+p.trans_time))
+                heappush(self.network.event_queue,
+                         Event(p, self.ID, action, self.clock.t+p.trans_time))
                 self.sent[action] += 1
                 agent_info = self.agent.get_reward(self.ID, action, p)
                 agent_info['q_y'] = max(
@@ -168,12 +169,13 @@ class Network:
         route_time (int): The total routing time of all ended packets.
     """
 
-    def __init__(self, file, dual=False):
+    def __init__(self, file, dual=False, isdrop=False):
         self.project = {}  # project from file identity to node ID
         self.nodes = OrderedDict()
         self.links = OrderedDict()
         self.agent = Policy()
         self.dual = dual
+        self.isdrop = isdrop
 
         self.clean()
 
@@ -240,10 +242,7 @@ class Network:
         for i in range(step_num):
             r = self.step(slot, lambd=lambd*slot, penalty=penalty)
             if r is not None:
-                if lr:
-                    self.agent.learn(r, lr=lr)
-                else:
-                    self.agent.learn(r)
+                self.agent.learn(r, lr=lr)
             route_time[i] = self.ave_route_time
             if droprate:
                 drop_rate[i] = self.drop_rate
@@ -268,23 +267,22 @@ class Network:
             if reward is not None:
                 rewards.append(reward)
 
-        i = 0
-        while i < len(self.event_queue):
-            if IsDrop and self.event_queue[i].packet.hops >= len(self.nodes):
+        end_time = self.clock.t + duration
+        closest_event = nsmallest(1, self.event_queue)
+        while len(closest_event) > 0 and closest_event[0].arrive_time <= end_time:
+            e = heappop(self.event_queue)
+            closest_event = nsmallest(1, self.event_queue)
+            self.nodes[e.from_node].sent[e.to_node] -= 1
+            if self.isdrop and e.packet.hops >= len(self.hops):
                 # drop the packet if too many hops
-                e = self.event_queue.pop(i)
-                self.nodes[e.from_node].sent[e.to_node] -= 1
                 self.drop_packets += 1
                 self.active_packets -= 1
                 self.agent.drop_penalty(e, penalty=penalty)
-            elif self.event_queue[i].arrive_time <= self.clock.t + duration:
-                e = self.event_queue.pop(i)
-                self.nodes[e.from_node].sent[e.to_node] -= 1
-                self.nodes[e.to_node].receive(e.packet)
-            else:
-                i += 1
+                continue
+            self.clock.t = e.arrive_time
+            self.nodes[e.to_node].receive(e.packet)
 
-        self.clock.t += duration
+        self.clock.t = end_time
         return rewards
 
     def new_packet(self, lambd):
