@@ -16,16 +16,13 @@ class Packet:
         birth (int): When the packet is generated.
 
     Attritubes:
-        start_queue (int): When the queuing started.
-        queue_time/trans_time (int): Queuing time/Transmission time.
+        trans_time (int): Transmission time.
         hops (int): The number of hops (one hop is a jump from node to node).
     """
     source: int
     dest: int
     birth: int
     hops: int = 0
-    start_queue: int = 0
-    queue_time: int = 0
     trans_time: int = 0
 
     def __repr__(self):
@@ -63,13 +60,11 @@ class Reward:
         agent_info (:obj:): Extra information from agent.get_reward
     """
 
-    def __init__(self, source, packet, action, agent_info):
+    def __init__(self, source, packet, action, agent_info={}):
         self.source = source
         self.dest = packet.dest
         self.action = action
         self.packet = packet
-        self.queue_time = packet.queue_time
-        self.trans_time = packet.trans_time
         self.agent_info = agent_info  # extra information defined by agents
 
     def __repr__(self):
@@ -137,16 +132,15 @@ class Node:
                 p = self.queue.pop(i)
                 logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
                 p.hops += 1
-                p.queue_time = self.clock.t - p.start_queue
                 p.trans_time = TransTime  # set the transmission delay
                 self.network.event_queue.append(
                     Event(p, self.ID, action, self.clock.t+p.trans_time))
                 self.sent[action] += 1
                 agent_info = self.agent.get_reward(self.ID, action, p)
+                agent_info['q_y'] = max(
+                    1, len(self.network.nodes[action].queue))
                 if self.network.dual:
                     agent_info['q_x'] = max(1, len(self.queue))
-                    agent_info['q_y'] = max(
-                        1, len(self.network.nodes[action].queue))
                 return Reward(self.ID, p, action, agent_info)
             else:
                 i += 1
