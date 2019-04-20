@@ -21,8 +21,8 @@ class Qroute(Policy):
         for source, table in self.Qtable.items():
             # Q_x(z, x) = 0, forall z in x.neighbors (not useful)
             table[source] = 0
-            # Q_x(z, y) = 1 if z == y else 0
-            table[self.links[source]] = np.eye(table.shape[1]) * TransTime
+            # Q_x(z, y) = -1 if z == y else 0
+            table[self.links[source]] = -np.eye(table.shape[1]) * TransTime
 
     def choose(self, source, dest):
         scores = self.Qtable[source][dest]
