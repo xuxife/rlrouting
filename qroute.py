@@ -15,8 +15,14 @@ class Qroute(Policy):
     def __init__(self, network, initQ=InitQ):
         self.links = network.links
         self.Qtable = {source:
-                       np.ones((len(self.links), len(neighbors)))
+                       np.ones((len(self.links), len(neighbors))) * initQ
                        for source, neighbors in self.links.items()}
+        for source, table in self.Qtable.items():
+            # Q_x(z, x) = 0, forall z in x.neighbors (not useful)
+            table[source] = 0
+            # Q_x(z, y) = 1 if z == y else 0
+            table[self.links[source]] = np.eye(
+                len(self.links[source])) * TransTime
 
     def choose(self, source, dest):
         scores = self.Qtable[source][dest]
