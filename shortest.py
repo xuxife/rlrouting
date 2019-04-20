@@ -1,9 +1,11 @@
 import numpy as np
-from env import *
+
+from base_policy import *
 
 
-class Shortest:
+class Shortest(Policy):
     """ Shortest agent determine the action based on the shortest path distance. """
+    attrs = ['distance', 'choice']
 
     def __init__(self, network):
         self.nw = network
@@ -29,15 +31,6 @@ class Shortest:
         """ Return the action with shortest distance and the distance """
         return self.choice[source][dest]
 
-    def learn(self, reward, lrq=0, lrp=0):
-        pass
-
-    def get_reward(self, source, dest, action):
-        pass
-
-    def drop_penalty(self, event, penalty=DropPenalty):
-        pass
-
 
 class GlobalRoute(Shortest):
     def dijkstra(self):
@@ -54,7 +47,7 @@ class GlobalRoute(Shortest):
                             self.choice[source][dest] = neibor
                             changing = True
 
-    def learn(self, reward, lrq=0, lrp=0):
+    def learn(self, rewards, lr={}):
         self.distance.fill(np.inf)
         np.fill_diagonal(self.distance, 0)
         self.choice.fill(0)

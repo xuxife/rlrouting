@@ -16,16 +16,13 @@ class Packet:
         birth (int): When the packet is generated.
 
     Attritubes:
-        start_queue (int): When the queuing started.
-        queue_time/trans_time (int): Queuing time/Transmission time.
+        trans_time (int): Transmission time.
         hops (int): The number of hops (one hop is a jump from node to node).
     """
     source: int
     dest: int
     birth: int
     hops: int = 0
-    start_queue: int = 0
-    queue_time: int = 0
     trans_time: int = 0
 
     def __repr__(self):
@@ -63,13 +60,11 @@ class Reward:
         agent_info (:obj:): Extra information from agent.get_reward
     """
 
-    def __init__(self, source, packet, action, agent_info):
+    def __init__(self, source, packet, action, agent_info={}):
         self.source = source
         self.dest = packet.dest
         self.action = action
         self.packet = packet
-        self.queue_time = packet.queue_time
-        self.trans_time = packet.trans_time
         self.agent_info = agent_info  # extra information defined by agents
 
     def __repr__(self):
@@ -114,8 +109,11 @@ class Node:
     def receive(self, packet):
         """ Receive a packet. """
         logging.debug(f"{self.clock}: {self.ID} receives {packet}")
-        packet.start_queue = self.clock.t
-        self.queue.append(packet)
+        if self.ID == packet.dest:
+            self.arrive(packet)
+        else:
+            packet.start_queue = self.clock.t
+            self.queue.append(packet)
 
     def send(self):
         """ Send a packet ordered by queue.
@@ -124,29 +122,25 @@ class Node:
 
         Returns:
             Reward: Reward of this action.
-            None if no packet is sent or the packet ends here.
+            None if no action is taken
         """
         i = 0
         while i < len(self.queue):
             dest = self.queue[i].dest
-            if dest == self.ID:
-                self.arrive(self.queue.pop(i))
-                return None
             action = self.agent.choose(self.ID, dest)
             if self.sent[action] <= BandwidthLimit:
                 p = self.queue.pop(i)
                 logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
                 p.hops += 1
-                p.queue_time = self.clock.t - p.start_queue
                 p.trans_time = TransTime  # set the transmission delay
                 self.network.event_queue.append(
                     Event(p, self.ID, action, self.clock.t+p.trans_time))
                 self.sent[action] += 1
                 agent_info = self.agent.get_reward(self.ID, action, p)
+                agent_info['q_y'] = max(
+                    1, len(self.network.nodes[action].queue))
                 if self.network.dual:
                     agent_info['q_x'] = max(1, len(self.queue))
-                    agent_info['q_y'] = max(
-                        1, len(self.network.nodes[action].queue))
                 return Reward(self.ID, p, action, agent_info)
             else:
                 i += 1
@@ -224,7 +218,7 @@ class Network:
         for node in self.nodes.values():
             node.agent = agent
 
-    def train(self, duration, lambd=Lambda, slot=SlotTime, lr={'q': LearnRateQ, 'p': LearnRateP}, penalty=DropPenalty, droprate=False):
+    def train(self, duration, lambd=Lambda, slot=SlotTime, lr={}, penalty=DropPenalty, droprate=False):
         """ run `duration` steps in given lambda (poisson)
 
         Args:
@@ -246,7 +240,10 @@ class Network:
         for i in range(step_num):
             r = self.step(slot, lambd=lambd*slot, penalty=penalty)
             if r is not None:
-                self.agent.learn(r, lr=lr)
+                if lr:
+                    self.agent.learn(r, lr=lr)
+                else:
+                    self.agent.learn(r)
             route_time[i] = self.ave_route_time
             if droprate:
                 drop_rate[i] = self.drop_rate
