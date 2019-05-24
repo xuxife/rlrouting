@@ -13,6 +13,7 @@ class Qroute(Policy):
     attrs = Policy.attrs + ['Qtable']
 
     def __init__(self, network, initQ=InitQ):
+        super().__init__(network)
         self.links = network.links
         self.Qtable = {source:
                        np.random.normal(

@@ -9,7 +9,7 @@ class Shortest(Policy):
     attrs = ['distance', 'choice']
 
     def __init__(self, network):
-        self.links = network.links
+        super().__init__(network)
         self.distance = np.empty((len(self.links), len(self.links)))
         self.prev = np.ones_like(self.distance, dtype=np.int) * -1
         self.choice = np.ones_like(self.distance, dtype=np.int) * -1

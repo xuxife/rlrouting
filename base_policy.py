@@ -5,14 +5,11 @@ from config import *
 class Policy:
     attrs = ['links']
 
-    def choose(self, source, dest):
-        pass
+    def __init__(self, network):
+        self.links = network.links
 
     def get_reward(self, source, dest, action):
         return {}
-
-    def learn(self, rewrads, lr={}):
-        pass
 
     def store(self, filename):
         with open(filename, 'wb') as f:
@@ -22,6 +19,3 @@ class Policy:
         with open(filename, 'rb') as f:
             for k, v in pickle.load(f).items():
                 self.__dict__[k] = v
-
-    def drop_penalty(self, event, penalty=DropPenalty):
-        pass

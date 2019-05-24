@@ -94,7 +94,7 @@ class Node:
         self.queue = []
         self.sent = {}
         self.network = network
-        self.agent = Policy()
+        self.agent = network.agent
 
     def __repr__(self):
         return f"Node<{self.ID}, queue: {self.queue}, sent: {self.sent}>"
@@ -173,7 +173,7 @@ class Network:
         self.project = {}  # project from file identity to node ID
         self.nodes = OrderedDict()
         self.links = OrderedDict()
-        self.agent = Policy()
+        self.agent = Policy(self)
         self.dual = dual
         self.isdrop = isdrop
 

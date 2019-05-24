@@ -9,7 +9,7 @@ class PolicyGradient(Policy):
     attrs = Policy.attrs + ['Theta', 'discount']
 
     def __init__(self, network, initP=InitP):
-        self.links = network.links
+        super().__init__(network)
         self.Theta = {source:
                       np.ones((len(self.links), len(neighbors))) * initP
                       for source, neighbors in self.links.items()}
