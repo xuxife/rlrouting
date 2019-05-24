@@ -14,18 +14,20 @@ class PolicyGradient(Policy):
                       np.ones((len(self.links), len(neighbors))) * initP
                       for source, neighbors in self.links.items()}
 
+    def _softmax(self, source, dest):
+        e_theta = np.exp(self.Theta[source][dest])
+        return e_theta/e_theta.sum()
+
     def choose(self, source, dest):
         """ choose returns the choice following weighted random sample """
-        e_theta = np.exp(self.Theta[source][dest])
         choice = np.random.choice(
-            self.links[source], p=e_theta/e_theta.sum())
+            self.links[source], p=self._softmax(source, dest))
         return choice
 
-    def _gradient(self, source, dest, action):
+    def _gradient(self, source, dest, action_idx):
         """ gradient returns a vector with length of neibors of source """
-        e_theta = np.exp(self.Theta[source][dest])
-        gradient = - e_theta/e_theta.sum()
-        gradient[self.links[source].index(action)] += 1
+        gradient = -self._softmax(source, dest)
+        gradient[action_idx] += 1
         return gradient
 
 
@@ -43,18 +45,20 @@ class HybridQ(Qroute, PolicyGradient):
             'max_Q_x_d': self.Qtable[source][packet.dest].max(),
         }
 
-    def learn(self, rewards, lr={'q': LearnRateQ, 'p': LearnRateP}):
+    def learn(self, rewards, lr={'q': LearnRateQ, 'p': LearnRateP, 'entropy': 0.001}):
         for reward in filter(lambda r: r.action != r.dest, rewards):
             source, dest, action = reward.source, reward.dest, reward.action
-            agent_info = reward.agent_info
-            action_index = self.links[source].index(action)
-            old_score = self.Qtable[source][dest][action_index]
-            self.Qtable[source][dest][action_index] += lr['q'] * \
-                (-agent_info['q_y'] + self.discount *
-                 agent_info['max_Q_y'] - old_score)
-            self.Theta[source][dest] += lr['p'] * \
-                (-agent_info['q_y'] + self.discount*agent_info['max_Q_y'] - agent_info['max_Q_x_d']) * \
-                self._gradient(source, dest, action)
+            info = reward.agent_info
+            action_idx = self.links[source].index(action)
+            softmax = self._softmax(source, dest)
+            r = -info['q_y'] - lr['entropy'] * np.log(softmax[action_idx])
+            old_score = self.Qtable[source][dest][action_idx]
+            self.Qtable[source][dest][action_idx] += lr['q'] * \
+                (r + self.discount * info['max_Q_y'] - old_score)
+            gradient = softmax
+            gradient[action_idx] += 1
+            self.Theta[source][dest] += lr['p'] * gradient * \
+                (r + self.discount * info['max_Q_y'] - info['max_Q_x_d'])
         for theta in self.Theta.values():
             np.clip(theta, -2, 2)
 
