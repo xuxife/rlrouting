@@ -3,7 +3,7 @@ from config import *
 
 
 class Policy:
-    attrs = ['links']
+    attrs = set(['links'])
 
     def __init__(self, network):
         self.links = network.links

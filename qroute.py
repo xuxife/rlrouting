@@ -7,10 +7,10 @@ from config import *
 class Qroute(Policy):
     """ Qroute use Q routing as policy. 
 
-    Attritubes:
+    Attributes:
         Qtable : Stores the Q scores of all nodes.
     """
-    attrs = Policy.attrs + ['Qtable']
+    attrs = Policy.attrs + set(['Qtable'])
 
     def __init__(self, network, initQ=InitQ):
         super().__init__(network)
@@ -45,7 +45,7 @@ class Qroute(Policy):
 
 
 class CDRQ(Qroute):
-    attrs = Qroute.attrs + ['confidence']
+    attrs = Qroute.attrs + set(['confidence'])
 
     def __init__(self, network, decay=0.9, initQ=InitQ):
         super().__init__(network, initQ)

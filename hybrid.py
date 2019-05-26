@@ -6,7 +6,7 @@ from config import *
 
 
 class PolicyGradient(Policy):
-    attrs = Policy.attrs + ['Theta', 'discount']
+    attrs = Policy.attrs + set(['Theta', 'discount'])
 
     def __init__(self, network, initP=InitP):
         super().__init__(network)
@@ -31,7 +31,7 @@ class PolicyGradient(Policy):
         return gradient
 
 
-class HybridQ(Qroute, PolicyGradient):
+class HybridQ(PolicyGradient, Qroute):
     attrs = Qroute.attrs + PolicyGradient.attrs
 
     def __init__(self, network, initQ=InitQ, initP=InitP, discount=Discount):
@@ -63,7 +63,7 @@ class HybridQ(Qroute, PolicyGradient):
             np.clip(theta, -2, 2)
 
 
-class HybridCDRQ(CDRQ, PolicyGradient):
+class HybridCDRQ(PolicyGradient, CDRQ):
     attrs = CDRQ.attrs + PolicyGradient.attrs
 
     def __init__(self, network, initQ=InitQ, initP=InitP, discount=Discount):
