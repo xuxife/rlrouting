@@ -6,65 +6,53 @@ from base_policy import *
 
 class Shortest(Policy):
     """ Shortest agent determine the action based on the shortest path distance. """
-    attrs = ['distance', 'choice']
+    attrs = Policy.attrs + ['distance', 'choice', 'mask']
 
     def __init__(self, network):
         super().__init__(network)
-        self.distance = np.empty((len(self.links), len(self.links)))
-        self.prev = np.ones_like(self.distance, dtype=np.int) * -1
-        self.choice = np.ones_like(self.distance, dtype=np.int) * -1
-        self.learn([])
+        self.distance = np.full((len(self.links), len(self.links)), np.inf)
+        self.choice = np.full_like(self.distance, -1, dtype=np.int)
+        self.mask = np.ones_like(self.distance, dtype=np.bool)
+        for node, neighbors in self.links.items():
+            self.distance[node, node] = 0
+            self.choice[node, node] = node
+            self.mask[node, node] = False
+            for neighbor in neighbors:
+                self.distance[node, neighbor] = 1
+                self.choice[node, neighbor] = neighbor
+                self.mask[node, neighbor] = False
+        self.unit = lambda x: 1  # regard unit distance as 1
+        self._calc_distance()
 
     def choose(self, source, dest):
         """ Return the action with shortest distance and the distance """
         return self.choice[source][dest]
 
-    def learn(self, rewards, lr={}):
-        self.distance.fill(np.inf)
-        np.fill_diagonal(self.distance, 0)
-        for i in range(len(self.links)):
-            self._dijkstra(i)
-        self._back_trace()
-
-    def _dijkstra(self, source, cost=lambda x, y: 1):
-        S = set()
-        Q = [(0, source)]
-        heapify(Q)
-        while Q:
-            dis, u = heappop(Q)
-            if u in S:
-                continue
-            S.add(u)
-            for v in self.links[u]:
-                alt = dis + cost(u, v)
-                if self.distance[source][v] > alt:
-                    self.distance[source][v] = alt
-                    self.prev[source][v] = u
-                    heappush(Q, (alt, v))
-
-    def _back_trace(self):
-        for source in range(self.choice.shape[0]):
-            for dest in range(self.choice.shape[1]):
-                if source == dest:
-                    continue
-                by = dest
-                while by != source:
-                    last_by = by
-                    by = self.prev[source][last_by]
-                self.choice[source][dest] = last_by
+    def _calc_distance(self):
+        self.distance[self.mask] = np.inf
+        changing = True
+        while changing:
+            changing = False
+            for source in self.links.keys():
+                for dest in self.links.keys():
+                    for neighbor in self.links[source]:
+                        new_distance = self.distance[neighbor][dest] + \
+                            self.unit(neighbor)
+                        if self.distance[source][dest] > new_distance:
+                            self.distance[source][dest] = new_distance
+                            self.choice[source][dest] = neighbor
+                            changing = True
 
 
 class GlobalRoute(Shortest):
     def __init__(self, network):
+        super().__init__(network)
         self.nodes = network.nodes
         self.queue_size = np.zeros(len(self.nodes), dtype=np.int)
-        super().__init__(network)
+        self.unit = lambda x: 1+self.queue_size[x]
+        self._calc_distance()
 
     def learn(self, rewards, lr={}):
         for i, node in self.nodes.items():
             self.queue_size[i] = len(node.queue)
-        self.distance.fill(np.inf)
-        np.fill_diagonal(self.distance, 0)
-        for i in range(len(self.links)):
-            self._dijkstra(i, lambda x, y: 1+self.queue_size[y])
-        self._back_trace()
+        self._calc_distance()
