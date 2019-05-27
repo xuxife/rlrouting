@@ -1,5 +1,4 @@
 import pickle
-from config import *
 
 
 class Policy:

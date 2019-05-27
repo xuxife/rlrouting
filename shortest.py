@@ -1,5 +1,4 @@
 import numpy as np
-from heapq import *
 
 from base_policy import *
 

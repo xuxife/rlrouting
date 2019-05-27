@@ -1,7 +1,6 @@
 import numpy as np
 
 from base_policy import *
-from config import *
 
 
 class Qroute(Policy):
@@ -12,7 +11,7 @@ class Qroute(Policy):
     """
     attrs = Policy.attrs + set(['Qtable'])
 
-    def __init__(self, network, initQ=InitQ):
+    def __init__(self, network, initQ=0):
         super().__init__(network)
         self.links = network.links
         self.Qtable = {source:
@@ -23,7 +22,7 @@ class Qroute(Policy):
             # Q_x(z, x) = 0, forall z in x.neighbors (not useful)
             table[source] = 0
             # Q_x(z, y) = -1 if z == y else 0
-            table[self.links[source]] = -np.eye(table.shape[1]) * TransTime
+            table[self.links[source]] = -np.eye(table.shape[1])
 
     def choose(self, source, dest):
         scores = self.Qtable[source][dest]
@@ -34,7 +33,7 @@ class Qroute(Policy):
     def get_reward(self, source, action, packet):
         return {'max_Q_y': self.Qtable[action][packet.dest].max()}
 
-    def learn(self, rewards, lr={'q': LearnRateQ}):
+    def learn(self, rewards, lr={'q': 0.1}):
         for reward in filter(lambda r: r.action != r.dest, rewards):
             source, dest, action = reward.source, reward.dest, reward.action
             action_max = reward.agent_info['max_Q_y']
@@ -47,7 +46,7 @@ class Qroute(Policy):
 class CDRQ(Qroute):
     attrs = Qroute.attrs + set(['confidence'])
 
-    def __init__(self, network, decay=0.9, initQ=InitQ):
+    def __init__(self, network, decay=0.9, initQ=0):
         super().__init__(network, initQ)
         network.dual = True  # enable DUAL mode
         self.decay = decay

@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from heapq import *
 
 from base_policy import *
-from config import *
 
 
 @dataclass
@@ -16,7 +15,7 @@ class Packet:
         source, dest (int): The start/end nodes' ID.
         birth (int): When the packet is generated.
 
-    Attritubes:
+    Attributes:
         trans_time (int): Transmission time.
         hops (int): The number of hops (one hop is a jump from node to node).
     """
@@ -53,7 +52,7 @@ class Event:
 
 
 class Reward:
-    """ Reward definds the backwrad reward from environment (what Network.step returns)
+    """ Reward defines the backward reward from environment (what Network.step returns)
 
     Attributes:
         source, dest (int): Where the packet from/destination
@@ -85,7 +84,7 @@ class Node:
 
     Attributes:
         queue (List[Packet]): Where Packets waiting for being delivered,
-        sent  (Dict[int, Packet]): An pesudo stage where Packets already sent but not arrive the next node.
+        sent  (Dict[int, Packet]): An pseudo stage where Packets already sent but not arrive the next node.
     """
 
     def __init__(self, ID, clock, network):
@@ -94,7 +93,10 @@ class Node:
         self.queue = []
         self.sent = {}
         self.network = network
-        self.agent = network.agent
+
+    @property
+    def agent(self):
+        return self.network.agent
 
     def __repr__(self):
         return f"Node<{self.ID}, queue: {self.queue}, sent: {self.sent}>"
@@ -128,16 +130,16 @@ class Node:
         i = 0
         while i < len(self.queue):
             dest = self.queue[i].dest
-            action = self.agent.choose(self.ID, dest)
-            if self.sent[action] <= BandwidthLimit:
+            action = self.network.agent.choose(self.ID, dest)
+            if self.sent[action] <= self.network.bandwidth:
                 p = self.queue.pop(i)
                 logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
                 p.hops += 1
-                p.trans_time = TransTime  # set the transmission delay
+                p.trans_time = self.network.transtime  # set the transmission delay
                 heappush(self.network.event_queue,
                          Event(p, self.ID, action, self.clock.t+p.trans_time))
                 self.sent[action] += 1
-                agent_info = self.agent.get_reward(self.ID, action, p)
+                agent_info = self.network.agent.get_reward(self.ID, action, p)
                 agent_info['q_y'] = max(
                     1, len(self.network.nodes[action].queue))
                 if self.network.dual:
@@ -149,10 +151,12 @@ class Node:
 
 
 class Network:
-    """ Network simulates packtes routing between connected nodes.
+    """ Network simulates packet routing between connected nodes.
 
     Args:
         file (string): The name of network file.
+        bandwidth (int): the bandwidth limitation of a connection
+        transtime (int, float): the time cost of transmitting a packet to next node
         dual (bool): whether the network runs in DUAL mode. (for DRQ & CDRQ)
 
     Attributes:
@@ -169,20 +173,22 @@ class Network:
         route_time (int): The total routing time of all ended packets.
     """
 
-    def __init__(self, file, dual=False, isdrop=False):
-        self.project = {}  # project from file identity to node ID
+    def __init__(self, file, bandwidth=3, transtime=1, dual=False, is_drop=False):
+        self.projection = {}  # project from file identity to node ID
+        self.bandwidth = bandwidth
+        self.transtime = transtime
         self.nodes = OrderedDict()
         self.links = OrderedDict()
         self.agent = Policy(self)
         self.dual = dual
-        self.isdrop = isdrop
+        self.is_drop = is_drop
 
         self.clean()
 
         self.read_network(file)
 
     def clean(self):
-        """ reset the network attritubes """
+        """ reset the network attributes """
         self.clock = Clock(0)
         self.event_queue = []
         self.all_packets = 0
@@ -203,12 +209,12 @@ class Network:
         ID = 0
         for l in lines:
             if l[0] == "1000":
-                self.project[l[1]] = ID
+                self.projection[l[1]] = ID
                 self.nodes[ID] = Node(ID, self.clock, self)
                 self.links[ID] = []
                 ID += 1
             elif l[0] == "2000":
-                source, dest = self.project[l[1]], self.project[l[2]]
+                source, dest = self.projection[l[1]], self.projection[l[2]]
                 self.nodes[source].sent[dest] = 0
                 self.nodes[dest].sent[source] = 0
                 self.links[source].append(dest)
@@ -220,7 +226,7 @@ class Network:
         for node in self.nodes.values():
             node.agent = agent
 
-    def train(self, duration, lambd=Lambda, slot=SlotTime, lr={}, penalty=DropPenalty, droprate=False):
+    def train(self, duration, lambd, slot=1, lr={}, penalty=0, droprate=False):
         """ run `duration` steps in given lambda (poisson)
 
         Args:
@@ -251,12 +257,13 @@ class Network:
                 drop_rate[i] = self.drop_rate
         return (route_time, drop_rate) if droprate else route_time
 
-    def step(self, duration, lambd=Lambda, penalty=DropPenalty):
+    def step(self, duration, lambd, penalty=0):
         """ step runs the whole network forward.
 
         Args:
             duration (int, duration): The duration of one step.
             lambd    (int, float)   : The Poisson parameter (lambda) of this step.
+            penalty  (int, float)   : The penalty of dropping a packet
 
         Returns:
             List[Reward]: A list of rewards from sending events happended in the timeslot.
@@ -276,7 +283,7 @@ class Network:
             e = heappop(self.event_queue)
             closest_event = nsmallest(1, self.event_queue)
             self.nodes[e.from_node].sent[e.to_node] -= 1
-            if self.isdrop and e.packet.hops >= len(self.hops):
+            if self.is_drop and e.packet.hops >= len(self.hops):
                 # drop the packet if too many hops
                 self.drop_packets += 1
                 self.active_packets -= 1

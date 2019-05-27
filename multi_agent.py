@@ -1,22 +1,20 @@
 import numpy as np
-from hybrid import HybridQ
-from config import *
+
+from hybrid import *
 
 
 class MaHybridQ(HybridQ):
     """ Multi-agent Hybrid Q routing with Eligibility Traces """
 
-    def __init__(self, network, initQ=InitQ, initP=InitP, discount=Discount, discount_trace=DiscountTrace):
+    def __init__(self, network, initQ=0, initP=0, discount=0.99, discount_trace=0.6):
         super().__init__(network, initQ, initP)
-        assert 0 <= discount <= 1, "discount factor should be in [0, 1]"
-        assert 0 <= discount_trace <= 1, "discount factor of eligibility trace should be in [0, 1]"
         self.Trace = {}
         self.discount = discount
         self.discount_trace = discount_trace
         self.reward_shape = 0
         self.Trace = np.zeros(self.Qtable.shape)
 
-    def learn(self, reward_list, lrq=LearnRateQ, lrp=LearnRateP):
+    def learn(self, reward_list, lrq=0.1, lrp=0.1):
         assert isinstance(
             reward_list, list), "input should be a list of rewards"
         num_rewards = len(reward_list)
