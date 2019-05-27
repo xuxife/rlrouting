@@ -23,11 +23,14 @@ class Qroute(Policy):
             # Q_x(z, y) = -1 if z == y else 0
             table[self.links[source]] = -np.eye(table.shape[1])
 
-    def choose(self, source, dest):
+    def choose(self, source, dest, score=False):
         scores = self.Qtable[source][dest]
         score_max = scores.max()
         choice = np.random.choice(np.argwhere(scores == score_max).flatten())
-        return self.links[source][choice]
+        if score:
+            return self.links[source][choice], score_max
+        else:
+            return self.links[source][choice]
 
     def get_reward(self, source, action, packet):
         return {'max_Q_y': self.Qtable[action][packet.dest].max()}
@@ -36,9 +39,9 @@ class Qroute(Policy):
         for reward in filter(lambda r: r.action != r.dest, rewards):
             source, dest, action = reward.source, reward.dest, reward.action
             action_max = reward.agent_info['max_Q_y']
-            action_index = self.links[source].index(action)
-            old_score = self.Qtable[source][dest][action_index]
-            self.Qtable[source][dest][action_index] += lr['q'] * \
+            action_idx = self.action_idx[source][action]
+            old_score = self.Qtable[source][dest][action_idx]
+            self.Qtable[source][dest][action_idx] += lr['q'] * \
                 (-reward.agent_info['q_y'] + action_max - old_score)
 
 
@@ -52,26 +55,20 @@ class CDRQ(Qroute):
         self.confidence = {source:
                            np.zeros((len(self.links), len(neighbors)))
                            for source, neighbors in self.links.items()}
-        for source, table in self.confidence.items():
+        self.updated_conf = {source:
+                             np.zeros(
+                                 (len(self.links), len(neighbors)), dtype=bool)
+                             for source, neighbors in self.links.items()}
+        for source in self.links.keys():
             # C_x(z, y) = 1 if z == y else 0
-            table[self.links[source]] = np.eye(len(self.links[source]))
-        self.is_updated_confi = {source:
-                                 np.zeros(
-                                     (len(self.links), len(neighbors)), dtype=bool)
-                                 for source, neighbors in self.links.items()}
-        for source, table in self.is_updated_confi.items():
-            table[self.links[source]] = np.eye(table.shape[1], dtype=bool)
-
-    def _choose(self, source, dest):
-        " same to choose but return different "
-        scores = self.Qtable[source][dest]
-        score_max = scores.max()
-        choice = np.random.choice(np.argwhere(scores == score_max).flatten())
-        return choice, score_max
+            self.confidence[source][self.links[source]] = np.eye(
+                len(self.links[source]))
+            self.updated_conf[source][self.links[source]] = np.eye(
+                len(self.links[source], dtype=bool))
 
     def get_reward(self, source, action, packet):
-        z_x, max_Q_x = self._choose(source, packet.source)
-        z_y, max_Q_y = self._choose(action, packet.dest)
+        z_x, max_Q_x = self.choose(source, packet.source, score=True)
+        z_y, max_Q_y = self.choose(action, packet.dest, score=True)
         return {
             'max_Q_x': max_Q_x,
             'max_Q_y': max_Q_y,
@@ -80,33 +77,33 @@ class CDRQ(Qroute):
         }
 
     def learn(self, rewards, lr={'f': 0.85, 'b': 0.95}):
-        for reward in rewards:
+        for reward in filter(lambda r: r.action != r.dest, rewards):
             x, y = reward.source, reward.action
             source, dest = reward.packet.source, reward.packet.dest
-            agent_info = reward.agent_info
-            x_index, y_index = self.links[y].index(x), self.links[x].index(y)
+            info = reward.agent_info
+            x_idx, y_idx = self.action_idx[y][x], self.action_idx[x][y]
             " forward "
             if y != dest:
-                old_Q_x = self.Qtable[x][dest][y_index]
+                old_Q_x = self.Qtable[x][dest][y_idx]
                 eta_forward = max(
-                    agent_info['C_y'], 1-self.confidence[x][dest][y_index])
-                self.Qtable[x][dest][y_index] += lr['f'] * eta_forward * \
-                    (agent_info['max_Q_y'] - agent_info['q_y'] - old_Q_x)
-                self.confidence[x][dest][y_index] += eta_forward * \
-                    (agent_info['C_y']-self.confidence[x][dest][y_index])
-                self.is_updated_confi[x][dest][y_index] = True
+                    info['C_y'], 1-self.confidence[x][dest][y_idx])
+                self.Qtable[x][dest][y_idx] += lr['f'] * eta_forward * \
+                    (info['max_Q_y'] - info['q_y'] - old_Q_x)
+                self.confidence[x][dest][y_idx] += eta_forward * \
+                    (info['C_y']-self.confidence[x][dest][y_idx])
+                self.updated_conf[x][dest][y_idx] = True
             " backward "
             if x != source:
-                old_Q_y = self.Qtable[y][source][x_index]
+                old_Q_y = self.Qtable[y][source][x_idx]
                 eta_backward = max(
-                    agent_info['C_x'], 1-self.confidence[y][source][x_index])
-                self.Qtable[y][source][x_index] += lr['b'] * eta_backward * \
-                    (agent_info['max_Q_x'] - agent_info['q_x'] - old_Q_y)
-                self.confidence[y][source][x_index] += eta_backward * \
-                    (agent_info['C_x']-self.confidence[y][source][x_index])
-                self.is_updated_confi[y][source][x_index] = True
+                    info['C_x'], 1-self.confidence[y][source][x_idx])
+                self.Qtable[y][source][x_idx] += lr['b'] * eta_backward * \
+                    (info['max_Q_x'] - info['q_x'] - old_Q_y)
+                self.confidence[y][source][x_idx] += eta_backward * \
+                    (info['C_x']-self.confidence[y][source][x_idx])
+                self.updated_conf[y][source][x_idx] = True
 
-        for source, table in self.is_updated_confi.items():
+        for source, table in self.updated_conf.items():
             self.confidence[source][~table] *= self.decay
             table.fill(False)
             table[self.links[source]] = np.eye(table.shape[1], dtype=bool)

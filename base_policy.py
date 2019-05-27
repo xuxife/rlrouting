@@ -6,6 +6,9 @@ class Policy:
 
     def __init__(self, network):
         self.links = network.links
+        self.action_idx = {node:
+                           {a: i for i, a in enumerate(neighbors)}
+                           for node, neighbors in self.links.items()}
 
     def choose(self, source, dest):
         return
