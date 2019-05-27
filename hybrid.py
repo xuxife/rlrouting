@@ -1,11 +1,10 @@
 import numpy as np
 
 from qroute import *
-from base_policy import *
 
 
 class PolicyGradient(Policy):
-    attrs = Policy.attrs + set(['Theta', 'discount'])
+    attrs = Policy.attrs | set(['Theta', 'discount'])
 
     def __init__(self, network, initP=0):
         super().__init__(network)
@@ -31,7 +30,7 @@ class PolicyGradient(Policy):
 
 
 class HybridQ(PolicyGradient, Qroute):
-    attrs = Qroute.attrs + PolicyGradient.attrs
+    attrs = Qroute.attrs | PolicyGradient.attrs
 
     def __init__(self, network, add_entropy=True, initQ=0, initP=0, discount=0.99):
         self.discount = discount
@@ -71,7 +70,7 @@ class HybridQ(PolicyGradient, Qroute):
 
 
 class HybridCDRQ(PolicyGradient, CDRQ):
-    attrs = CDRQ.attrs + PolicyGradient.attrs
+    attrs = CDRQ.attrs | PolicyGradient.attrs
 
     def __init__(self, network, initQ=0, initP=0, discount=0.99):
         self.discount = discount

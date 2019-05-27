@@ -1,11 +1,11 @@
 import numpy as np
 
-from base_policy import *
+from base_policy import Policy
 
 
 class Shortest(Policy):
     """ Shortest agent determine the action based on the shortest path distance. """
-    attrs = Policy.attrs + set(['distance', 'choice', 'mask'])
+    attrs = Policy.attrs | set(['distance', 'choice', 'mask'])
 
     def __init__(self, network):
         super().__init__(network)

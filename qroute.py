@@ -1,19 +1,18 @@
 import numpy as np
 
-from base_policy import *
+from base_policy import Policy
 
 
 class Qroute(Policy):
-    """ Qroute use Q routing as policy. 
+    """ Qroute use Q routing as policy.
 
     Attributes:
         Qtable : Stores the Q scores of all nodes.
     """
-    attrs = Policy.attrs + set(['Qtable'])
+    attrs = Policy.attrs | set(['Qtable'])
 
     def __init__(self, network, initQ=0):
         super().__init__(network)
-        self.links = network.links
         self.Qtable = {source:
                        np.random.normal(
                            initQ, 1, (len(self.links), len(neighbors)))
@@ -44,7 +43,7 @@ class Qroute(Policy):
 
 
 class CDRQ(Qroute):
-    attrs = Qroute.attrs + set(['confidence'])
+    attrs = Qroute.attrs | set(['confidence'])
 
     def __init__(self, network, decay=0.9, initQ=0):
         super().__init__(network, initQ)
