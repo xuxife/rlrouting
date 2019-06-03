@@ -36,7 +36,7 @@ class Qroute(Policy):
         return {'max_Q_y': self.Qtable[action][packet.dest].max()}
 
     def learn(self, rewards, lr={'q': 0.1}):
-        for reward in filter(lambda r: r.action != r.dest, rewards):
+        for reward in rewards:
             source, dest, action = reward.source, reward.dest, reward.action
             info = reward.agent_info
             r = -info['q_y'] - info['t_y']

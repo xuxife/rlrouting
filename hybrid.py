@@ -36,7 +36,7 @@ class HybridQ(PolicyGradient, Qroute):
     def __init__(self, network, add_entropy=True, initQ=0, initP=0, discount=0.99):
         self.discount = discount
         self.add_entropy = add_entropy
-        self.limit = (-2, 2)
+        self.constrain = (-2, 2)
         PolicyGradient.__init__(self, network, initP)
         Qroute.__init__(self, network, initQ)
 
@@ -47,16 +47,14 @@ class HybridQ(PolicyGradient, Qroute):
         }
 
     def learn(self, rewards, lr={'q': 0.1, 'p': 0.1, 'e': 0.1}):
-        for reward in filter(lambda r: r.action != r.dest, rewards):
+        for reward in rewards:
             source, dest, action = reward.source, reward.dest, reward.action
             info = reward.agent_info
-            action_idx = self.links[source].index(action)
+            action_idx = self.action_idx[source][action]
             softmax = self._softmax(source, dest)
+            r = -info['q_y']-info['t_y']
             if self.add_entropy:
-                r = -info['q_y']-info['t_y'] - \
-                    lr['e'] * (softmax*np.log2(softmax)).sum()
-            else:
-                r = -info['q_y']-info['t_y']
+                r -= lr['e'] * (softmax*np.log2(softmax)).sum()
             old_score = self.Qtable[source][dest][action_idx]
             self.Qtable[source][dest][action_idx] += lr['q'] * \
                 (r + self.discount * info['max_Q_y'] - old_score)
@@ -65,7 +63,7 @@ class HybridQ(PolicyGradient, Qroute):
             self.Theta[source][dest] += lr['p'] * gradient * \
                 (r + self.discount * info['max_Q_y'] - info['max_Q_x_d'])
         for theta in self.Theta.values():
-            theta.clip(*self.limit, out=theta)
+            theta.clip(*self.constrain, out=theta)
 
 
 class HybridCDRQ(PolicyGradient, CDRQ):
