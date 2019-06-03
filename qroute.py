@@ -28,7 +28,7 @@ class Qroute(Policy):
         score_max = scores.max()
         choice = np.random.choice(np.argwhere(scores == score_max).flatten())
         if score:
-            return self.links[source][choice], score_max
+            return choice, score_max
         else:
             return self.links[source][choice]
 
@@ -64,43 +64,41 @@ class CDRQ(Qroute):
             self.confidence[source][self.links[source]] = np.eye(
                 len(self.links[source]))
             self.updated_conf[source][self.links[source]] = np.eye(
-                len(self.links[source], dtype=bool))
+                len(self.links[source]), dtype=bool)
 
     def get_reward(self, source, action, packet):
-        z_x, max_Q_x = self.choose(source, packet.source, score=True)
-        z_y, max_Q_y = self.choose(action, packet.dest, score=True)
+        z_b, max_Q_b = self.choose(source, packet.source, score=True)
+        z_f, max_Q_f = self.choose(action, packet.dest, score=True)
         return {
-            'max_Q_x': max_Q_x,
-            'max_Q_y': max_Q_y,
-            'C_x': self.confidence[source][packet.source][z_x],
-            'C_y': self.confidence[action][packet.dest][z_y],
+            'max_Q_b': max_Q_b,
+            'max_Q_f': max_Q_f,
+            'C_b': self.confidence[source][packet.source][z_b],
+            'C_f': self.confidence[action][packet.dest][z_f],
         }
 
     def learn(self, rewards, lr={'f': 0.85, 'b': 0.95}):
-        for reward in filter(lambda r: r.action != r.dest, rewards):
+        for reward in rewards:
             x, y = reward.source, reward.action
             source, dest = reward.packet.source, reward.packet.dest
             info = reward.agent_info
             x_idx, y_idx = self.action_idx[y][x], self.action_idx[x][y]
             " forward "
             if y != dest:
-                old_Q_x = self.Qtable[x][dest][y_idx]
-                eta_forward = max(
-                    info['C_y'], 1-self.confidence[x][dest][y_idx])
-                self.Qtable[x][dest][y_idx] += lr['f'] * eta_forward * \
-                    (info['max_Q_y'] - info['q_y'] - old_Q_x)
-                self.confidence[x][dest][y_idx] += eta_forward * \
-                    (info['C_y']-self.confidence[x][dest][y_idx])
+                old_Q_f = self.Qtable[x][dest][y_idx]
+                eta_f = max(info['C_f'], 1-self.confidence[x][dest][y_idx])
+                self.Qtable[x][dest][y_idx] += lr['f'] * eta_f * \
+                    (info['max_Q_f'] - info['q_y'] - old_Q_f)
+                self.confidence[x][dest][y_idx] += eta_f * \
+                    (info['C_f']-self.confidence[x][dest][y_idx])
                 self.updated_conf[x][dest][y_idx] = True
             " backward "
             if x != source:
-                old_Q_y = self.Qtable[y][source][x_idx]
-                eta_backward = max(
-                    info['C_x'], 1-self.confidence[y][source][x_idx])
-                self.Qtable[y][source][x_idx] += lr['b'] * eta_backward * \
-                    (info['max_Q_x'] - info['q_x'] - old_Q_y)
-                self.confidence[y][source][x_idx] += eta_backward * \
-                    (info['C_x']-self.confidence[y][source][x_idx])
+                old_Q_b = self.Qtable[y][source][x_idx]
+                eta_b = max(info['C_b'], 1-self.confidence[y][source][x_idx])
+                self.Qtable[y][source][x_idx] += lr['b'] * eta_b * \
+                    (info['max_Q_b'] - info['q_x'] - old_Q_b)
+                self.confidence[y][source][x_idx] += eta_b * \
+                    (info['C_b']-self.confidence[y][source][x_idx])
                 self.updated_conf[y][source][x_idx] = True
 
         for source, table in self.updated_conf.items():
