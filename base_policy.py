@@ -13,7 +13,7 @@ class Policy:
     def choose(self, source, dest):
         raise NotImplementedError
 
-    def get_reward(self, source, dest, action):
+    def get_info(self, source, dest, action):
         return {}
 
     def learn(self, rewards, lr={}):

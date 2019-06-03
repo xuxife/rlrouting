@@ -40,7 +40,7 @@ class HybridQ(PolicyGradient, Qroute):
         PolicyGradient.__init__(self, network, initP)
         Qroute.__init__(self, network, initQ)
 
-    def get_reward(self, source, action, packet):
+    def get_info(self, source, action, packet):
         return {
             'max_Q_y': self.Qtable[action][packet.dest].max(),
             'max_Q_x_d': self.Qtable[source][packet.dest].max(),
@@ -75,8 +75,8 @@ class HybridCDRQ(PolicyGradient, CDRQ):
         PolicyGradient.__init__(self, network, initP)
         CDRQ.__init__(self, network, decay=decay, initQ=initQ)
 
-    def get_reward(self, source, action, packet):
-        info = CDRQ.get_reward(self, source, action, packet)
+    def get_info(self, source, action, packet):
+        info = CDRQ.get_info(self, source, action, packet)
         info['max_Q_x_d'] = self.Qtable[source][packet.dest].max()
         info['max_Q_y_s'] = self.Qtable[action][packet.source].max()
         return info

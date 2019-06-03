@@ -57,7 +57,7 @@ class Reward:
     Attributes:
         source, dest (int): Where the packet from/destination
         action (int): Which neighbor the last node chose
-        agent_info (:obj:): Extra information from agent.get_reward
+        agent_info (:obj:): Extra information from agent.get_info
     """
 
     def __init__(self, source, packet, action, agent_info={}):
@@ -140,7 +140,7 @@ class Node:
                 heappush(self.network.event_queue,
                          Event(p, self.ID, action, self.clock.t+p.trans_time))
                 self.sent[action] += 1
-                agent_info = self.network.agent.get_reward(self.ID, action, p)
+                agent_info = self.network.agent.get_info(self.ID, action, p)
                 agent_info['q_y'] = max(
                     1, len(self.network.nodes[action].queue))
                 agent_info['t_y'] = p.trans_time

@@ -32,7 +32,7 @@ class Qroute(Policy):
         else:
             return self.links[source][choice]
 
-    def get_reward(self, source, action, packet):
+    def get_info(self, source, action, packet):
         return {'max_Q_y': self.Qtable[action][packet.dest].max()}
 
     def learn(self, rewards, lr={'q': 0.1}):
@@ -67,7 +67,7 @@ class CDRQ(Qroute):
             self.updated_conf[source][self.links[source]] = np.eye(
                 len(self.links[source]), dtype=bool)
 
-    def get_reward(self, source, action, packet):
+    def get_info(self, source, action, packet):
         z_b, max_Q_b = self.choose(source, packet.source, score=True)
         z_f, max_Q_f = self.choose(action, packet.dest, score=True)
         return {
