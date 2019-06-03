@@ -11,13 +11,13 @@ class Policy:
                            for node, neighbors in self.links.items()}
 
     def choose(self, source, dest):
-        return
+        raise NotImplementedError
 
     def get_reward(self, source, dest, action):
         return {}
 
     def learn(self, rewards, lr={}):
-        return
+        raise NotImplementedError
 
     def store(self, filename):
         with open(filename, 'wb') as f:

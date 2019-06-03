@@ -4,7 +4,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from heapq import *
 
-from base_policy import *
+from base_policy import Policy
 
 
 @dataclass
@@ -102,6 +102,7 @@ class Node:
         return f"Node<{self.ID}, queue: {self.queue}, sent: {self.sent}>"
 
     def arrive(self, packet):
+        """ The packet ends at this Node """
         logging.debug(f"{self.clock}: {packet} ends in {self.ID}")
         self.network.active_packets -= 1
         self.network.end_packets += 1
@@ -110,7 +111,7 @@ class Node:
         del packet
 
     def receive(self, packet):
-        """ Receive a packet. """
+        """ Receive a packet """
         logging.debug(f"{self.clock}: {self.ID} receives {packet}")
         if self.ID == packet.dest:
             self.arrive(packet)
@@ -160,6 +161,8 @@ class Network:
         bandwidth (int): the bandwidth limitation of a connection
         transtime (int, float): the time cost of transmitting a packet to next node
         dual (bool): whether the network runs in DUAL mode. (for DRQ & CDRQ)
+        is_drop (bool): whether the network drop packets on some conditions
+        read_func (function): a specific function reads a network file into self.nodes & self.links
 
     Attributes:
         clock (Clock): The simulation time.
@@ -175,7 +178,7 @@ class Network:
         route_time (int): The total routing time of all ended packets.
     """
 
-    def __init__(self, file, bandwidth=3, transtime=1, dual=False, is_drop=False):
+    def __init__(self, file, bandwidth=3, transtime=1, dual=False, is_drop=False, read_func=None):
         self.projection = {}  # project from file identity to node ID
         self.bandwidth = bandwidth
         self.transtime = transtime
@@ -187,7 +190,10 @@ class Network:
 
         self.clean()
 
-        self.read_network(file)
+        if read_func is None:
+            self.read_network(file)
+        else:
+            read_func(self, file)
 
     def clean(self):
         """ reset the network attributes """
@@ -221,12 +227,6 @@ class Network:
                 self.nodes[dest].sent[source] = 0
                 self.links[source].append(dest)
                 self.links[dest].append(source)
-
-    def bind(self, agent):
-        """ bind the given agent to every node """
-        self.agent = agent
-        for node in self.nodes.values():
-            node.agent = agent
 
     def train(self, duration, lambd, slot=1, lr={}, penalty=0, droprate=False):
         """ run `duration` steps in given lambda (poisson)
@@ -303,12 +303,11 @@ class Network:
         Args:
             lambd (int, float): The Poisson distribution parameter.
         Returns:
-            list: A list of new packets having random sources and destinations..
+            list: new packets having random sources and destinations.
         """
-        size = np.random.poisson(lambd)
         packets = []
         nodes_id = list(self.nodes.keys())
-        for _ in range(size):
+        for _ in range(np.random.poisson(lambd)):
             source = np.random.choice(nodes_id)
             dest = np.random.choice(nodes_id)
             while dest == source:
