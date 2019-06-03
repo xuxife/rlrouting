@@ -38,11 +38,12 @@ class Qroute(Policy):
     def learn(self, rewards, lr={'q': 0.1}):
         for reward in filter(lambda r: r.action != r.dest, rewards):
             source, dest, action = reward.source, reward.dest, reward.action
-            action_max = reward.agent_info['max_Q_y']
+            info = reward.agent_info
+            r = -info['q_y'] - info['t_y']
             action_idx = self.action_idx[source][action]
             old_score = self.Qtable[source][dest][action_idx]
             self.Qtable[source][dest][action_idx] += lr['q'] * \
-                (-reward.agent_info['q_y'] + action_max - old_score)
+                (r + info['max_Q_y'] - old_score)
 
 
 class CDRQ(Qroute):
@@ -76,7 +77,7 @@ class CDRQ(Qroute):
             'C_f': self.confidence[action][packet.dest][z_f],
         }
 
-    def learn(self, rewards, lr={'f': 0.85, 'b': 0.95}):
+    def learn(self, rewards, lr={}):
         for reward in rewards:
             x, y = reward.source, reward.action
             source, dest = reward.packet.source, reward.packet.dest
@@ -84,19 +85,21 @@ class CDRQ(Qroute):
             x_idx, y_idx = self.action_idx[y][x], self.action_idx[x][y]
             " forward "
             if y != dest:
+                r_f = -info['q_y']-info['t_y']
                 old_Q_f = self.Qtable[x][dest][y_idx]
                 eta_f = max(info['C_f'], 1-self.confidence[x][dest][y_idx])
-                self.Qtable[x][dest][y_idx] += lr['f'] * eta_f * \
-                    (info['max_Q_f'] - info['q_y'] - old_Q_f)
+                self.Qtable[x][dest][y_idx] += eta_f * \
+                    (r_f + info['max_Q_f'] - old_Q_f)
                 self.confidence[x][dest][y_idx] += eta_f * \
                     (info['C_f']-self.confidence[x][dest][y_idx])
                 self.updated_conf[x][dest][y_idx] = True
             " backward "
             if x != source:
+                r_b = -info['q_x']-info['t_x']
                 old_Q_b = self.Qtable[y][source][x_idx]
                 eta_b = max(info['C_b'], 1-self.confidence[y][source][x_idx])
-                self.Qtable[y][source][x_idx] += lr['b'] * eta_b * \
-                    (info['max_Q_b'] - info['q_x'] - old_Q_b)
+                self.Qtable[y][source][x_idx] += eta_b * \
+                    (r_b + info['max_Q_b'] - old_Q_b)
                 self.confidence[y][source][x_idx] += eta_b * \
                     (info['C_b']-self.confidence[y][source][x_idx])
                 self.updated_conf[y][source][x_idx] = True

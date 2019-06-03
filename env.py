@@ -142,8 +142,10 @@ class Node:
                 agent_info = self.network.agent.get_reward(self.ID, action, p)
                 agent_info['q_y'] = max(
                     1, len(self.network.nodes[action].queue))
+                agent_info['t_y'] = p.trans_time
                 if self.network.dual:
                     agent_info['q_x'] = max(1, len(self.queue))
+                    agent_info['t_x'] = p.trans_time
                 return Reward(self.ID, p, action, agent_info)
             else:
                 i += 1

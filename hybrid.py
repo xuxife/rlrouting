@@ -53,9 +53,10 @@ class HybridQ(PolicyGradient, Qroute):
             action_idx = self.links[source].index(action)
             softmax = self._softmax(source, dest)
             if self.add_entropy:
-                r = -info['q_y'] - lr['e'] * np.log2(softmax[action_idx])
+                r = -info['q_y']-info['t_y'] - \
+                    lr['e'] * (softmax*np.log2(softmax)).sum()
             else:
-                r = -info['q_y']
+                r = -info['q_y']-info['t_y']
             old_score = self.Qtable[source][dest][action_idx]
             self.Qtable[source][dest][action_idx] += lr['q'] * \
                 (r + self.discount * info['max_Q_y'] - old_score)
