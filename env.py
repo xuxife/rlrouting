@@ -98,6 +98,10 @@ class Node:
     def agent(self):
         return self.network.agent
 
+    @property
+    def mode(self):
+        return self.network.mode
+
     def __repr__(self):
         return f"Node<{self.ID}, queue: {self.queue}, sent: {self.sent}>"
 
@@ -118,6 +122,8 @@ class Node:
         else:
             packet.start_queue = self.clock.t
             self.queue.append(packet)
+            if self.mode == 'bp':
+                self.agent.receive(self.ID, packet.dest)
 
     def send(self):
         """ Send a packet ordered by queue.
@@ -128,29 +134,43 @@ class Node:
             Reward: Reward of this action.
             None if no action is taken
         """
+        if self.mode == 'bp' and len(self.queue) > 0:
+            action, dest = self.agent.choose(self.ID, filter(
+                lambda n: self.sent[n] < self.network.bandwidth, self.sent.keys()))
+            if action is None:
+                return None
+            p = next(p for p in self.queue if p.dest == dest)
+            self._send_packet(p, action)
+            self.agent.send(self.ID, dest)
+            return Reward(self.ID, p, action, {})
+
         i = 0
         while i < len(self.queue):
             dest = self.queue[i].dest
-            action = self.network.agent.choose(self.ID, dest)
-            if self.sent[action] <= self.network.bandwidth:
+            action = self.agent.choose(self.ID, dest)
+            if self.sent[action] < self.network.bandwidth:
                 p = self.queue.pop(i)
-                logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
-                p.hops += 1
-                p.trans_time = self.network.transtime  # set the transmission delay
-                heappush(self.network.event_queue,
-                         Event(p, self.ID, action, self.clock.t+p.trans_time))
-                self.sent[action] += 1
-                agent_info = self.network.agent.get_info(self.ID, action, p)
+                self._send_packet(p, action)
+                # then build Reward
+                agent_info = self.agent.get_info(self.ID, action, p)
                 agent_info['q_y'] = max(
                     1, len(self.network.nodes[action].queue))
                 agent_info['t_y'] = p.trans_time
-                if self.network.dual:
+                if self.mode == 'dual':
                     agent_info['q_x'] = max(1, len(self.queue))
                     agent_info['t_x'] = p.trans_time
                 return Reward(self.ID, p, action, agent_info)
             else:
                 i += 1
         return None
+
+    def _send_packet(self, p, action):
+        logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
+        p.hops += 1
+        p.trans_time = self.network.transtime  # set the transmission delay
+        heappush(self.network.event_queue,
+                 Event(p, self.ID, action, self.clock.t+p.trans_time))
+        self.sent[action] += 1
 
 
 class Network:
@@ -160,7 +180,6 @@ class Network:
         file (string): The name of network file.
         bandwidth (int): the bandwidth limitation of a connection
         transtime (int, float): the time cost of transmitting a packet to next node
-        dual (bool): whether the network runs in DUAL mode. (for DRQ & CDRQ)
         is_drop (bool): whether the network drop packets on some conditions
         read_func (function): a specific function reads a network file into self.nodes & self.links
 
@@ -169,6 +188,8 @@ class Network:
         nodes (Dict[Int, Node]): An ordered dictionary of all nodes in this network.
         links (Dict[Int, List[Int]]): lists of connected nodes' ID.
         agent (:obj:): bind an agent object who has methods `choose`, `learn`
+        mode (string): Network mode, 
+            None -> Standard mode, 'dual' -> Duality mode, 'bp' -> BackPressure mode
         event_queue (List[Event]): A queue of following happen events.
         all_packets (int): The total number of packets in this simulation.
         end_packets (int): The packets already ends in its destination.
@@ -178,14 +199,13 @@ class Network:
         route_time (int): The total routing time of all ended packets.
     """
 
-    def __init__(self, file, bandwidth=3, transtime=1, dual=False, is_drop=False, read_func=None):
+    def __init__(self, file, bandwidth=3, transtime=1, is_drop=False, read_func=None):
         self.projection = {}  # project from file identity to node ID
         self.bandwidth = bandwidth
         self.transtime = transtime
         self.nodes = OrderedDict()
         self.links = OrderedDict()
         self.agent = Policy(self)
-        self.dual = dual
         self.is_drop = is_drop
 
         self.clean()
@@ -194,6 +214,10 @@ class Network:
             self.read_network(file)
         else:
             read_func(self, file)
+
+    @property
+    def mode(self):
+        return self.agent.mode
 
     def clean(self):
         """ reset the network attributes """
@@ -210,6 +234,8 @@ class Network:
             node.queue = []
             for neighbor in node.sent:
                 node.sent[neighbor] = 0
+        if self.mode == 'bp':
+            self.agent.reset()
 
     def read_network(self, file):
         with open(file, 'r') as f:

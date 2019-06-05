@@ -47,11 +47,11 @@ class Qroute(Policy):
 
 
 class CDRQ(Qroute):
+    mode = 'dual'
     attrs = Qroute.attrs | set(['confidence'])
 
     def __init__(self, network, decay=0.9, initQ=0):
         super().__init__(network, initQ)
-        network.dual = True  # enable DUAL mode
         self.decay = decay
         self.confidence = {source:
                            np.zeros((len(self.links), len(neighbors)))

@@ -1,23 +1,26 @@
+import numpy as np
 import pickle
 
 
 class Policy:
+    mode = None
     attrs = set(['links'])
 
     def __init__(self, network):
-        self.links = network.links
+        self.links = {k: np.array(v, dtype=np.int)
+                      for k, v in network.links.items()}
         self.action_idx = {node:
                            {a: i for i, a in enumerate(neighbors)}
                            for node, neighbors in self.links.items()}
 
     def choose(self, source, dest):
-        raise NotImplementedError
+        pass
 
     def get_info(self, source, dest, action):
         return {}
 
     def learn(self, rewards, lr={}):
-        raise NotImplementedError
+        pass
 
     def store(self, filename):
         with open(filename, 'wb') as f:

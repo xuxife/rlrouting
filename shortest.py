@@ -10,37 +10,47 @@ class Shortest(Policy):
     def __init__(self, network):
         super().__init__(network)
         self.distance = np.full((len(self.links), len(self.links)), np.inf)
-        self.choice = np.full_like(self.distance, -1, dtype=np.int)
         self.mask = np.ones_like(self.distance, dtype=np.bool)
-        for node, neighbors in self.links.items():
-            self.distance[node, node] = 0
-            self.choice[node, node] = node
-            self.mask[node, node] = False
-            for neighbor in neighbors:
-                self.distance[node, neighbor] = 1
-                self.choice[node, neighbor] = neighbor
-                self.mask[node, neighbor] = False
+        self.choice = {n: np.zeros((len(self.links), len(v)), dtype=np.bool)
+                       for n, v in self.links.items()}
+        for x, neighbors in self.links.items():
+            self.distance[x, x] = 0
+            self.mask[x, x] = False
+            for y in neighbors:
+                self.distance[x, y] = 1
+                self.choice[x][y][self.action_idx[x][y]] = True
+                self.mask[x, y] = False
         self.unit = lambda x: 1  # regard unit distance as 1
         self._calc_distance()
 
-    def choose(self, source, dest):
+    def choose(self, source, dest, random=False):
         """ Return the action with shortest distance and the distance """
-        return self.choice[source][dest]
+        if random:
+            return np.random.choice(self.links[source][self.choice[source][dest]])
+        else:
+            return self.links[source][self.choice[source][dest]][0]
 
     def _calc_distance(self):
         self.distance[self.mask] = np.inf
         changing = True
         while changing:
             changing = False
-            for source in self.links.keys():
-                for dest in self.links.keys():
-                    for neighbor in self.links[source]:
-                        new_distance = self.distance[neighbor][dest] + \
-                            self.unit(neighbor)
-                        if self.distance[source][dest] > new_distance:
-                            self.distance[source][dest] = new_distance
-                            self.choice[source][dest] = neighbor
-                            changing = True
+            for x in self.links.keys():
+                if x == 19:
+                    print(self.distance[x])
+                for y in self.links[x]:
+                    new_dis = self.distance[y] + self.unit(y)
+                    greater = self.distance[x] > new_dis
+                    if x == 19:
+                        print(y, new_dis)
+                    if greater.any():
+                        self.distance[x][greater] = new_dis[greater]
+                        self.choice[x][greater, :].fill(False)
+                        self.choice[x][greater, self.action_idx[x][y]] = True
+                        changing = True
+                    else:
+                        self.choice[x][self.distance[x] ==
+                                       new_dis, self.action_idx[x][y]] = True
 
 
 class GlobalRoute(Shortest):
