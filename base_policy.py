@@ -3,6 +3,15 @@ import pickle
 
 
 class Policy:
+    """
+    `Policy` is the base class of all routing policies.
+
+    Attributes:
+        mode (string | None): identifier of what mode the policy needs Network running in.
+        attrs (Set[string]): the attributes would be dumpped/loaded in `self.store`/`self.load`.
+        links (Dict[Int, np.array(Int)]): represents the network graph
+        action_idx (Dict[Int, Dict[Int, Int]]): store the indexes of node's neighbors in `links`
+    """
     mode = None
     attrs = set(['links'])
 
