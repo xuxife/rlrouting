@@ -27,10 +27,7 @@ class Qroute(Policy):
         scores = self.Qtable[source][dest]
         score_max = scores.max()
         choice = np.random.choice(np.argwhere(scores == score_max).flatten())
-        if score:
-            return choice, score_max
-        else:
-            return self.links[source][choice]
+        return (choice, score_max) if score else self.links[source][choice]
 
     def get_info(self, source, action, packet):
         return {'max_Q_y': self.Qtable[action][packet.dest].max()}
