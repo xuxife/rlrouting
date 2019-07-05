@@ -140,6 +140,7 @@ class Node:
             if action is None:
                 return None
             p = next(p for p in self.queue if p.dest == dest)
+            self.queue.remove(p)
             self._send_packet(p, action)
             self.agent.send(self.ID, dest)
             return Reward(self.ID, p, action, {})
