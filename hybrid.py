@@ -72,16 +72,23 @@ class HybridCDRQ(PolicyGradient, CDRQ):
     def __init__(self, network, add_entropy=False, initQ=0, initP=0, decay=0.9, discount=0.99):
         self.discount = discount
         self.add_entropy = add_entropy
+        self.constrain = (-2, 2)
         PolicyGradient.__init__(self, network, initP)
         CDRQ.__init__(self, network, decay=decay, initQ=initQ)
 
     def get_info(self, source, action, packet):
-        info = CDRQ.get_info(self, source, action, packet)
-        info['max_Q_x_d'] = self.Qtable[source][packet.dest].max()
-        info['max_Q_y_s'] = self.Qtable[action][packet.source].max()
-        return info
+        z_b, max_Q_b = CDRQ.choose(self, source, packet.source, score=True)
+        z_f, max_Q_f = CDRQ.choose(self, action, packet.dest, score=True)
+        return {
+            'max_Q_b': max_Q_b,
+            'max_Q_f': max_Q_f,
+            'C_b': self.confidence[source][packet.source][z_b],
+            'C_f': self.confidence[action][packet.dest][z_f],
+            'max_Q_x_d': self.Qtable[source][packet.dest].max(),
+            'max_Q_y_s': self.Qtable[action][packet.source].max(),
+        }
 
-    def learn(self, rewards, lr={'f': 0.85, 'b': 0.95, 'q': 0.1, 'p': 0.1, 'e': 0.1}):
+    def learn(self, rewards, lr={'f': 0.85, 'b': 0.95, 'p': 0.1, 'e': 0.1}):
         for reward in rewards:
             x, y = reward.source, reward.action
             source, dest = reward.packet.source, reward.packet.dest
@@ -123,3 +130,6 @@ class HybridCDRQ(PolicyGradient, CDRQ):
             self.confidence[node][~table] *= self.decay
             table.fill(False)
             table[self.links[node]] = np.eye(table.shape[1], dtype=bool)
+
+        for theta in self.Theta.values():
+            theta.clip(*self.constrain, out=theta)
