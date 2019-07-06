@@ -122,8 +122,7 @@ class Node:
         else:
             packet.start_queue = self.clock.t
             self.queue.append(packet)
-            if self.mode == 'bp':
-                self.agent.receive(self.ID, packet.dest)
+            self.agent.receive(self.ID, packet.dest)
 
     def send(self):
         """ Send a packet ordered by queue.
@@ -152,6 +151,7 @@ class Node:
             if self.sent[action] < self.network.bandwidth:
                 p = self.queue.pop(i)
                 self._send_packet(p, action)
+                self.agent.send(self.ID, dest)
                 # then build Reward
                 agent_info = self.agent.get_info(self.ID, action, p)
                 agent_info['q_y'] = max(

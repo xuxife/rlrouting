@@ -31,6 +31,12 @@ class Policy:
     def learn(self, rewards, lr={}):
         pass
 
+    def receive(self, source, dest):
+        pass
+
+    def send(self, source, dest):
+        pass
+
     def store(self, filename):
         with open(filename, 'wb') as f:
             pickle.dump({k: self.__dict__[k] for k in self.attrs}, f)

@@ -62,6 +62,12 @@ class GlobalRoute(Shortest):
         self.unit = lambda x: 1+self.queue_size[x]
         self._calc_distance()
 
+    def receive(self, source, dest):
+        self.queue_size[source] += 1
+
+    def send(self, source, dest):
+        self.queue_size[source] -= 1
+
     def learn(self, rewards, lr={}):
         for i, node in self.nodes.items():
             self.queue_size[i] = len(node.queue)
