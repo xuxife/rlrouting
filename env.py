@@ -156,10 +156,11 @@ class Node:
                 agent_info = self.agent.get_info(self.ID, action, p)
                 agent_info['q_y'] = max(
                     1, len(self.network.nodes[action].queue))
-                agent_info['t_y'] = p.trans_time
+                # agent_info['q_y'] = self.clock.t - p.start_queue
+                agent_info['t_y'] = 0
                 if self.mode == 'dual':
                     agent_info['q_x'] = max(1, len(self.queue))
-                    agent_info['t_x'] = p.trans_time
+                    agent_info['t_x'] = 0
                 return Reward(self.ID, p, action, agent_info)
             else:
                 i += 1
