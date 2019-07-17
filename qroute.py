@@ -42,9 +42,7 @@ class Qroute(Policy):
             self.Qtable[source][dest][action_idx] += lr['q'] * \
                 (r + info['max_Q_y'] - old_score)
 
-
-class CDRQ(Qroute):
-    mode = 'dual'
+class CQ(Qroute):
     attrs = Qroute.attrs | set(['confidence'])
 
     def __init__(self, network, decay=0.9, initQ=0):
@@ -63,6 +61,35 @@ class CDRQ(Qroute):
                 len(self.links[source]))
             self.updated_conf[source][self.links[source]] = np.eye(
                 len(self.links[source]), dtype=bool)
+
+    def get_info(self, source, action, packet):
+        z, max_Q = self.choose(action, packet.dest, score=True)
+        return {
+            'max_Q_f': max_Q,
+            'C_f': self.confidence[action][packet.dest][z]
+        }
+
+    def learn(self, rewards, lr={}):
+        for reward in rewards:
+            x, y = reward.source, reward.action
+            dest = reward.packet.dest
+            info = reward.agent_info
+            y_idx = self.action_idx[x][y]
+            if y != dest:
+                r = -info['q_y']-info['t_y']
+                old_Q = self.Qtable[x][dest][y_idx]
+                eta = max(info['C_f'], 1-self.confidence[x][dest][y_idx])
+                self.Qtable[x][dest][y_idx] += eta * (r + info['max_Q_f'] - old_Q)
+                self.confidence[x][dest][y_idx] += eta * (info['C_f']-self.confidence[x][dest][y_idx])
+                self.updated_conf[x][dest][y_idx] = True
+        for source, table in self.updated_conf.items():
+            self.confidence[source][~table] *= self.decay
+            table.fill(False)
+            table[self.links[source]] = np.eye(table.shape[1], dtype=bool)
+
+
+class CDRQ(CQ):
+    mode = 'dual'
 
     def get_info(self, source, action, packet):
         z_b, max_Q_b = self.choose(source, packet.source, score=True)
