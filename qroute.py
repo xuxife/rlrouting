@@ -4,11 +4,6 @@ from base_policy import Policy
 
 
 class Qroute(Policy):
-    """ Qroute use Q routing as policy.
-
-    Attributes:
-        Qtable : Stores the Q scores of all nodes.
-    """
     attrs = Policy.attrs | set(['Qtable'])
 
     def __init__(self, network, initQ=0):
@@ -42,6 +37,7 @@ class Qroute(Policy):
             self.Qtable[source][dest][action_idx] += lr['q'] * \
                 (r + info['max_Q_y'] - old_score)
 
+
 class CQ(Qroute):
     attrs = Qroute.attrs | set(['confidence'])
 
@@ -51,16 +47,9 @@ class CQ(Qroute):
         self.confidence = {source:
                            np.zeros((len(self.links), len(neighbors)))
                            for source, neighbors in self.links.items()}
-        self.updated_conf = {source:
-                             np.zeros(
-                                 (len(self.links), len(neighbors)), dtype=bool)
-                             for source, neighbors in self.links.items()}
-        for source in self.links.keys():
-            # C_x(z, y) = 1 if z == y else 0
-            self.confidence[source][self.links[source]] = np.eye(
-                len(self.links[source]))
-            self.updated_conf[source][self.links[source]] = np.eye(
-                len(self.links[source]), dtype=bool)
+        for source, neighbors in self.links.items():
+            # base case: C_x(z, y) = 1 if z == y else 0
+            self.confidence[source][neighbors] = np.eye(len(neighbors))
 
     def get_info(self, source, action, packet):
         z, max_Q = self.choose(action, packet.dest, score=True)
@@ -75,17 +64,24 @@ class CQ(Qroute):
             dest = reward.packet.dest
             info = reward.agent_info
             y_idx = self.action_idx[x][y]
-            if y != dest:
-                r = -info['q_y']-info['t_y']
-                old_Q = self.Qtable[x][dest][y_idx]
-                eta = max(info['C_f'], 1-self.confidence[x][dest][y_idx])
-                self.Qtable[x][dest][y_idx] += eta * (r + info['max_Q_f'] - old_Q)
-                self.confidence[x][dest][y_idx] += eta * (info['C_f']-self.confidence[x][dest][y_idx])
-                self.updated_conf[x][dest][y_idx] = True
-        for source, table in self.updated_conf.items():
-            self.confidence[source][~table] *= self.decay
-            table.fill(False)
-            table[self.links[source]] = np.eye(table.shape[1], dtype=bool)
+            if y == dest:
+                # in this case, the decision of sending to the destination is undoubtedly correct
+                # or say, eta = 0
+                continue
+            r = -info['q_y']-info['t_y']
+            old_Q = self.Qtable[x][dest][y_idx]
+            old_conf = self.confidence[x][dest][y_idx]
+            eta = max(info['C_f'], 1-old_conf)
+            self.Qtable[x][dest][y_idx] += eta * \
+                (r + info['max_Q_f'] - old_Q)
+            self.confidence[x][dest][y_idx] += eta * (info['C_f']-old_conf)
+            # counteract the effect of confidence_decay()
+            self.confidence[x][dest][y_idx] /= self.decay
+        self.confidence_decay()
+
+    def confidence_decay(self):
+        for table in self.confidence.values():
+            table *= self.decay
 
 
 class CDRQ(CQ):
@@ -111,24 +107,23 @@ class CDRQ(CQ):
             if y != dest:
                 r_f = -info['q_y']-info['t_y']
                 old_Q_f = self.Qtable[x][dest][y_idx]
-                eta_f = max(info['C_f'], 1-self.confidence[x][dest][y_idx])
+                old_conf_f = self.confidence[x][dest][y_idx]
+                eta_f = max(info['C_f'], 1-old_conf_f)
                 self.Qtable[x][dest][y_idx] += eta_f * \
                     (r_f + info['max_Q_f'] - old_Q_f)
                 self.confidence[x][dest][y_idx] += eta_f * \
-                    (info['C_f']-self.confidence[x][dest][y_idx])
-                self.updated_conf[x][dest][y_idx] = True
+                    (info['C_f']-old_conf_f)
+                self.confidence[x][dest][y_idx] /= self.decay
             " backward "
             if x != source:
                 r_b = -info['q_x']-info['t_x']
                 old_Q_b = self.Qtable[y][source][x_idx]
-                eta_b = max(info['C_b'], 1-self.confidence[y][source][x_idx])
+                old_conf_b = self.confidence[y][source][x_idx]
+                eta_b = max(info['C_b'], 1-old_conf_b)
                 self.Qtable[y][source][x_idx] += eta_b * \
                     (r_b + info['max_Q_b'] - old_Q_b)
                 self.confidence[y][source][x_idx] += eta_b * \
-                    (info['C_b']-self.confidence[y][source][x_idx])
-                self.updated_conf[y][source][x_idx] = True
+                    (info['C_b']-old_conf_b)
+                self.confidence[y][source][x_idx] /= self.decay
 
-        for source, table in self.updated_conf.items():
-            self.confidence[source][~table] *= self.decay
-            table.fill(False)
-            table[self.links[source]] = np.eye(table.shape[1], dtype=bool)
+        self.confidence_decay()
