@@ -9,15 +9,14 @@ from base_policy import Policy
 
 @dataclass
 class Packet:
-    """ Packet is an abstract packet.
-
+    """
     Args:
-        source, dest (int): The start/end nodes' ID.
+        source, dest (int): The start/destination node's ID.
         birth (int): When the packet is generated.
 
     Attributes:
         trans_time (int): Transmission time.
-        hops (int): The number of hops (one hop is a jump from node to node).
+        hops (int): The number of hops.
     """
     source: int
     dest: int
@@ -56,7 +55,8 @@ class Reward:
 
     Attributes:
         source, dest (int): Where the packet from/destination
-        action (int): Which neighbor the last node chose
+        packet (Packet): which packet generates the reward
+        action (int): Which neighbor the `source` chose
         agent_info (:obj:): Extra information from agent.get_info
     """
 
@@ -65,7 +65,7 @@ class Reward:
         self.dest = packet.dest
         self.action = action
         self.packet = packet
-        self.agent_info = agent_info  # extra information defined by agents
+        self.agent_info = agent_info
 
     def __repr__(self):
         return f"Reward<{self.source}->{self.dest} by {self.action}>"
@@ -105,8 +105,8 @@ class Node:
     def __repr__(self):
         return f"Node<{self.ID}, queue: {self.queue}, sent: {self.sent}>"
 
-    def arrive(self, packet):
-        """ The packet ends at this Node """
+    def end(self, packet):
+        """ a packet ends at this node """
         logging.debug(f"{self.clock}: {packet} ends in {self.ID}")
         self.network.active_packets -= 1
         self.network.end_packets += 1
@@ -115,24 +115,33 @@ class Node:
         del packet
 
     def receive(self, packet):
-        """ Receive a packet """
+        """ receive a packet """
         logging.debug(f"{self.clock}: {self.ID} receives {packet}")
         if self.ID == packet.dest:
-            self.arrive(packet)
+            self.end(packet)
         else:
             packet.start_queue = self.clock.t
             self.queue.append(packet)
             self.agent.receive(self.ID, packet.dest)
 
+    def _send_packet(self, p, action):
+        " send `packet` to `action` "
+        logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
+        p.hops += 1
+        self.sent[action] += 1
+        p.trans_time = self.network.transtime  # set the transmission delay
+        heappush(self.network.event_queue,
+                 Event(p, self.ID, action, self.clock.t+p.trans_time))
+
     def send(self):
-        """ Send a packet ordered by queue.
-        Call agent.choose to determine the next node for the packet,
-        then check whether the connection is avaliable.
+        """ Send a packet in queue order.
+        agent.choose determines the action/next node
 
         Returns:
             Reward: Reward of this action.
             None if no action is taken
         """
+        # BackPressure Mode
         if self.mode == 'bp' and len(self.queue) > 0:
             action, dest = self.agent.choose(self.ID, filter(
                 lambda n: self.sent[n] < self.network.bandwidth, self.sent.keys()))
@@ -144,19 +153,23 @@ class Node:
             self.agent.send(self.ID, dest)
             return Reward(self.ID, p, action, {})
 
+        # Default Mode
         i = 0
         while i < len(self.queue):
             dest = self.queue[i].dest
             action = self.agent.choose(self.ID, dest)
+            # if the connection to chosen `action` is full, skip the packet and send the next packet in queue
             if self.sent[action] < self.network.bandwidth:
                 p = self.queue.pop(i)
                 self._send_packet(p, action)
                 self.agent.send(self.ID, dest)
                 # then build Reward
                 agent_info = self.agent.get_info(self.ID, action, p)
-                agent_info['q_y'] = max(
-                    1, len(self.network.nodes[action].queue))
-                # agent_info['q_y'] = self.clock.t - p.start_queue
+                # set the environment rewards
+                # q: queuing delay; t: transmission delay
+                # agent_info['q_y'] = max(
+                #     1, len(self.network.nodes[action].queue))
+                agent_info['q_y'] = self.clock.t - p.start_queue
                 agent_info['t_y'] = 0
                 if self.mode == 'dual':
                     agent_info['q_x'] = max(1, len(self.queue))
@@ -166,32 +179,24 @@ class Node:
                 i += 1
         return None
 
-    def _send_packet(self, p, action):
-        logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
-        p.hops += 1
-        p.trans_time = self.network.transtime  # set the transmission delay
-        heappush(self.network.event_queue,
-                 Event(p, self.ID, action, self.clock.t+p.trans_time))
-        self.sent[action] += 1
-
 
 class Network:
     """ Network simulates packet routing between connected nodes.
 
     Args:
         file (string): The name of network file.
-        bandwidth (int): the bandwidth limitation of a connection
-        transtime (int, float): the time cost of transmitting a packet to next node
-        is_drop (bool): whether the network drop packets on some conditions
+        bandwidth (int): the bandwidth limitation of a connection/the maximum number of transmitting packets simultaneously
+        transtime (int, float): the time delay of transmitting a packet to next node
+        is_drop (bool): whether the network drop packet on some condition (the packet hops overpass number of all nodes)
         read_func (function): a specific function reads a network file into self.nodes & self.links
 
     Attributes:
         clock (Clock): The simulation time.
         nodes (Dict[Int, Node]): An ordered dictionary of all nodes in this network.
         links (Dict[Int, List[Int]]): lists of connected nodes' ID.
-        agent (:obj:): bind an agent object who has methods `choose`, `learn`
+        agent (:obj:): bind an agent, which follows class `Policy`
         mode (string): Network mode, 
-            None -> Standard mode, 'dual' -> Duality mode, 'bp' -> BackPressure mode
+            None -> Default mode, 'dual' -> Duality mode, 'bp' -> BackPressure mode
         event_queue (List[Event]): A queue of following happen events.
         all_packets (int): The total number of packets in this simulation.
         end_packets (int): The packets already ends in its destination.
@@ -202,20 +207,20 @@ class Network:
     """
 
     def __init__(self, file, bandwidth=3, transtime=1, is_drop=False, read_func=None):
-        self.projection = {}  # project from file identity to node ID
         self.bandwidth = bandwidth
         self.transtime = transtime
         self.nodes = OrderedDict()
         self.links = OrderedDict()
         self.agent = Policy(self)
         self.is_drop = is_drop
-
-        self.clean()
+        self.clock = Clock(0)
 
         if read_func is None:
             self.read_network(file)
         else:
             read_func(self, file)
+
+        self.clean()
 
     @property
     def mode(self):
@@ -240,6 +245,7 @@ class Network:
             self.agent.reset()
 
     def read_network(self, file):
+        self.projection = {}  # project from file identity to node ID
         with open(file, 'r') as f:
             lines = [l.split() for l in f.readlines()]
         ID = 0
@@ -255,6 +261,70 @@ class Network:
                 self.nodes[dest].sent[source] = 0
                 self.links[source].append(dest)
                 self.links[dest].append(source)
+
+    def new_packet(self, lambd):
+        """ Generates new packets following Poisson(lambd).
+
+        Args:
+            lambd (int, float): The Poisson distribution parameter.
+        Returns:
+            list: new packets having random sources and destinations.
+        """
+        packets = []
+        nodes_num = len(self.nodes)
+        for _ in range(np.random.poisson(lambd)):
+            source = np.random.randint(0, nodes_num)
+            dest = np.random.randint(0, nodes_num)
+            while dest == source:
+                dest = np.random.randint(0, nodes_num)
+            packets.append(Packet(source, dest, self.clock.t))
+        return packets
+
+    def inject(self, packet):
+        """ Injects the packet into network """
+        self.all_packets += 1
+        self.active_packets += 1
+        self.nodes[packet.source].receive(packet)
+
+    def step(self, duration, lambd, penalty=0):
+        """ step runs the network forward `duration` time
+            new packets arrive once, rewards return once
+
+        Args:
+            duration (int, duration): The duration of one step.
+            lambd    (int, float)   : The Poisson parameter (lambda) of this step.
+            penalty  (int, float)   : The penalty of dropping a packet
+
+        Returns:
+            List[Reward]: A list of rewards from sending events happended in the timeslot.
+        """
+        # new packets arrives
+        for p in self.new_packet(lambd):
+            self.inject(p)
+
+        rewards = []
+        for node in self.nodes.values():
+            reward = node.send()
+            if reward is not None:
+                rewards.append(reward)
+
+        end_time = self.clock.t + duration
+        next_event = nsmallest(1, self.event_queue)
+        while len(next_event) > 0 and next_event[0].arrive_time <= end_time:
+            e = heappop(self.event_queue)
+            self.nodes[e.from_node].sent[e.to_node] -= 1
+            next_event = nsmallest(1, self.event_queue)
+            if self.is_drop and e.packet.hops >= len(self.nodes):
+                # drop the packet if too many hops
+                self.drop_packets += 1
+                self.active_packets -= 1
+                self.agent.drop_penalty(e, penalty=penalty)
+                continue
+            self.clock.t = e.arrive_time
+            self.nodes[e.to_node].receive(e.packet)
+
+        self.clock.t = end_time
+        return rewards
 
     def train(self, duration, lambd, slot=1, lr={}, penalty=0, droprate=False):
         """ run `duration` steps in given lambda (poisson)
@@ -286,68 +356,6 @@ class Network:
             if droprate:
                 drop_rate[i] = self.drop_rate
         return (route_time, drop_rate) if droprate else route_time
-
-    def step(self, duration, lambd, penalty=0):
-        """ step runs the whole network forward.
-
-        Args:
-            duration (int, duration): The duration of one step.
-            lambd    (int, float)   : The Poisson parameter (lambda) of this step.
-            penalty  (int, float)   : The penalty of dropping a packet
-
-        Returns:
-            List[Reward]: A list of rewards from sending events happended in the timeslot.
-        """
-        for p in self.new_packet(lambd):
-            self.inject(p)
-
-        rewards = []
-        for node in self.nodes.values():
-            reward = node.send()
-            if reward is not None:
-                rewards.append(reward)
-
-        end_time = self.clock.t + duration
-        closest_event = nsmallest(1, self.event_queue)
-        while len(closest_event) > 0 and closest_event[0].arrive_time <= end_time:
-            e = heappop(self.event_queue)
-            closest_event = nsmallest(1, self.event_queue)
-            self.nodes[e.from_node].sent[e.to_node] -= 1
-            if self.is_drop and e.packet.hops >= len(self.hops):
-                # drop the packet if too many hops
-                self.drop_packets += 1
-                self.active_packets -= 1
-                self.agent.drop_penalty(e, penalty=penalty)
-                continue
-            self.clock.t = e.arrive_time
-            self.nodes[e.to_node].receive(e.packet)
-
-        self.clock.t = end_time
-        return rewards
-
-    def new_packet(self, lambd):
-        """ Generates new packets following Poisson(lambd).
-
-        Args:
-            lambd (int, float): The Poisson distribution parameter.
-        Returns:
-            list: new packets having random sources and destinations.
-        """
-        packets = []
-        nodes_id = list(self.nodes.keys())
-        for _ in range(np.random.poisson(lambd)):
-            source = np.random.choice(nodes_id)
-            dest = np.random.choice(nodes_id)
-            while dest == source:
-                dest = np.random.choice(nodes_id)
-            packets.append(Packet(source, dest, self.clock.t))
-        return packets
-
-    def inject(self, packet):
-        """ Injects the packet into network """
-        self.all_packets += 1
-        self.active_packets += 1
-        self.nodes[packet.source].receive(packet)
 
     @property
     def ave_hops(self):

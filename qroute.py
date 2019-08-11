@@ -13,7 +13,7 @@ class Qroute(Policy):
                            initQ, 1, (len(self.links), len(neighbors)))
                        for source, neighbors in self.links.items()}
         for source, table in self.Qtable.items():
-            # Q_x(z, x) = 0, forall z in x.neighbors (not useful)
+            # Q_x(z, x) = 0, forall z in x.neighbors
             table[source] = 0
             # Q_x(z, y) = -1 if z == y else 0
             table[self.links[source]] = -np.eye(table.shape[1])
