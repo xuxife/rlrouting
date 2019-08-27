@@ -1,13 +1,11 @@
 import numpy as np
 import logging
 from collections import OrderedDict
-from dataclasses import dataclass
 from heapq import *
 
 from base_policy import Policy
 
 
-@dataclass
 class Packet:
     """
     Args:
@@ -18,17 +16,18 @@ class Packet:
         trans_time (int): Transmission time.
         hops (int): The number of hops.
     """
-    source: int
-    dest: int
-    birth: int
-    hops: int = 0
-    trans_time: int = 0
+
+    def __init__(self, source, dest, birth):
+        self.source = source
+        self.dest = dest
+        self.birth = birth
+        self.hops = 0
+        self.trans_time = 0
 
     def __repr__(self):
         return f"Packet<{self.source}->{self.dest}>"
 
 
-@dataclass
 class Event:
     """ Event records a packet passing through a connection.
 
@@ -38,10 +37,12 @@ class Event:
         to_node     (int)   : Where the delivery ends, the destination.
         arrive_time (int)   : When the corresponding packet would arrive to_node.
     """
-    packet: Packet
-    from_node: int
-    to_node: int
-    arrive_time: int
+
+    def __init__(self, packet, from_node, to_node, arrive_time):
+        self.packet = packet
+        self.from_node = from_node
+        self.to_node = to_node
+        self.arrive_time = arrive_time
 
     def __repr__(self):
         return f"Event<{self.from_node}->{self.to_node} at {self.arrive_time}>"
