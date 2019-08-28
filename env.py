@@ -171,7 +171,7 @@ class Node:
                 # agent_info['q_y'] = max(
                 #     1, len(self.network.nodes[action].queue))
                 agent_info['q_y'] = self.clock.t - p.start_queue
-                agent_info['t_y'] = 0
+                agent_info['t_y'] = 1
                 if self.mode == 'dual':
                     agent_info['q_x'] = max(1, len(self.queue))
                     agent_info['t_x'] = 0
@@ -287,22 +287,17 @@ class Network:
         self.active_packets += 1
         self.nodes[packet.source].receive(packet)
 
-    def step(self, duration, lambd, penalty=0):
-        """ step runs the network forward `duration` time
-            new packets arrive once, rewards return once
+    def step(self, duration, penalty=0):
+        """ step runs the network forward `duration`
+        one sending and one agent learning
 
         Args:
             duration (int, duration): The duration of one step.
-            lambd    (int, float)   : The Poisson parameter (lambda) of this step.
             penalty  (int, float)   : The penalty of dropping a packet
 
         Returns:
             List[Reward]: A list of rewards from sending events happended in the timeslot.
         """
-        # new packets arrives
-        for p in self.new_packet(lambd):
-            self.inject(p)
-
         rewards = []
         for node in self.nodes.values():
             reward = node.send()
@@ -327,13 +322,16 @@ class Network:
         self.clock.t = end_time
         return rewards
 
-    def train(self, duration, lambd, slot=1, lr={}, penalty=0, droprate=False):
-        """ run `duration` steps in given lambda (poisson)
+    def train(self, duration, lambd, slot=1, freq=1, lr={}, penalty=0, droprate=False):
+        """ train process the whole network forward
+        new packet arriving at `lambd` (s^-1) rate
+        call `step` to send and learn from rewards
 
         Args:
             duration (second) : the length of running period
             lambd (second^(-1)) : the Poisson parameter
-            slot (second) : the length of one time slot
+            slot (second) : the length of one time slot (one new arriving)
+            freq (int, second^(-1)) : the frequency of sending & learning (calliing `step`) in one time slot
             lr (Dict[str, float]): learning rate for Qtable or policy-table
             penalty (float): drop penalty
             droprate (bool): whether return droprate or not
@@ -347,12 +345,15 @@ class Network:
         if droprate:
             drop_rate = np.zeros(step_num)
         for i in range(step_num):
-            r = self.step(slot, lambd=lambd*slot, penalty=penalty)
-            if r is not None:
-                if lr:
-                    self.agent.learn(r, lr=lr)
-                else:
-                    self.agent.learn(r)
+            for p in self.new_packet(lambd*slot):
+                self.inject(p)
+            for _ in range(freq):
+                r = self.step(slot, penalty=penalty)
+                if r is not None:
+                    if lr:
+                        self.agent.learn(r, lr=lr)
+                    else:
+                        self.agent.learn(r)
             route_time[i] = self.ave_route_time
             if droprate:
                 drop_rate[i] = self.drop_rate
