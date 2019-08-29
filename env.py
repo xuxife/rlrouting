@@ -274,18 +274,18 @@ class Network:
         packets = []
         nodes_num = len(self.nodes)
         for _ in range(np.random.poisson(lambd)):
-            source = np.random.randint(0, nodes_num)
-            dest = np.random.randint(0, nodes_num)
-            while dest == source:
+            source, dest = np.random.randint(0, nodes_num, size=2)
+            while dest == source:  # assert: source != dest
                 dest = np.random.randint(0, nodes_num)
             packets.append(Packet(source, dest, self.clock.t))
         return packets
 
-    def inject(self, packet):
-        """ Injects the packet into network """
-        self.all_packets += 1
-        self.active_packets += 1
-        self.nodes[packet.source].receive(packet)
+    def inject(self, packets):
+        """ Injects the packets into network """
+        self.all_packets += len(packets)
+        self.active_packets += len(packets)
+        for packet in packets:
+            self.nodes[packet.source].receive(packet)
 
     def step(self, duration, penalty=0):
         """ step runs the network forward `duration`
@@ -298,11 +298,7 @@ class Network:
         Returns:
             List[Reward]: A list of rewards from sending events happended in the timeslot.
         """
-        rewards = []
-        for node in self.nodes.values():
-            reward = node.send()
-            if reward is not None:
-                rewards.append(reward)
+        rewards = filter(None, [node.send() for node in self.nodes.values()])
 
         end_time = self.clock.t + duration
         next_event = nsmallest(1, self.event_queue)
@@ -345,8 +341,7 @@ class Network:
         if droprate:
             drop_rate = np.zeros(step_num)
         for i in range(step_num):
-            for p in self.new_packet(lambd*slot):
-                self.inject(p)
+            self.inject(self.new_packet(lambd*slot))
             for _ in range(freq):
                 r = self.step(slot, penalty=penalty)
                 if r is not None:
