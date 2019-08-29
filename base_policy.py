@@ -42,6 +42,14 @@ class Policy:
         " [optional] define what the agent should do when a packet is sent by a node "
         pass
 
+    def reset(self):
+        " [optional] reset the agent "
+        pass
+
+    def drop_penalty(self, penalty):
+        " [optional] penalty when a packet is dropped "
+        pass
+
     def store(self, filename):
         " dump `attrs` by pickle "
         with open(filename, 'wb') as f:
