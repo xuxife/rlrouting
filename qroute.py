@@ -6,8 +6,9 @@ from base_policy import Policy
 class Qroute(Policy):
     attrs = Policy.attrs | set(['Qtable'])
 
-    def __init__(self, network, initQ=0):
+    def __init__(self, network, initQ=0, discount=0.99):
         super().__init__(network)
+        self.discount = discount
         self.Qtable = {source:
                        np.random.normal(
                            initQ, 1, (len(self.links), len(neighbors)))
@@ -35,7 +36,7 @@ class Qroute(Policy):
             action_idx = self.action_idx[source][action]
             old_score = self.Qtable[source][dest][action_idx]
             self.Qtable[source][dest][action_idx] += lr['q'] * \
-                (r + info['max_Q_y'] - old_score)
+                (r + self.discount * info['max_Q_y'] - old_score)
 
 
 class CQ(Qroute):
