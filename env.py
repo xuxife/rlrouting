@@ -298,7 +298,8 @@ class Network:
         Returns:
             List[Reward]: A list of rewards from sending events happended in the timeslot.
         """
-        rewards = filter(None, [node.send() for node in self.nodes.values()])
+        rewards = list(filter(None, [node.send()
+                                     for node in self.nodes.values()]))
 
         end_time = self.clock.t + duration
         next_event = nsmallest(1, self.event_queue)
