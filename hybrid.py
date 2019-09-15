@@ -14,7 +14,7 @@ class PolicyGradient(Policy):
                       for x, ys in self.links.items()}
 
     def _softmax(self, source, dest):
-        e_theta = self.Theta[source][dest].exp()
+        e_theta = np.exp(self.Theta[source][dest])
         return e_theta/e_theta.sum()
 
     def choose(self, source, dest, prob=None):
