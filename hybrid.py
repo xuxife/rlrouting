@@ -10,7 +10,7 @@ class PolicyGradient(Policy):
         super().__init__(network)
         self.add_entropy = add_entropy
         self.discount = discount
-        self.Theta = {x: np.full((len(self.links), len(ys)), initP)
+        self.Theta = {x: np.full((len(self.links), len(ys)), initP, dtype=np.float64)
                       for x, ys in self.links.items()}
 
     def _softmax(self, source, dest):

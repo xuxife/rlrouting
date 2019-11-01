@@ -11,7 +11,8 @@ class MaHybridQ(HybridQ):
         super().__init__(network, initQ=initQ, initP=initP, discount=discount)
         self.discount_trace = discount_trace
         self.reward_shape = 0
-        self.Trace = {k: np.zeros_like(v) for k, v in self.Theta.items()}
+        self.Trace = {k: np.zeros_like(v, dtype=np.float64)
+                      for k, v in self.Theta.items()}
 
     def learn(self, rewards, lr={'q': 0.1, 'p': 0.1}):
         num_rewards = len(rewards)
@@ -23,7 +24,7 @@ class MaHybridQ(HybridQ):
             x[i], dest[i] = reward.source, reward.dest
             y_idx[i] = self.action_idx[x[i]][reward.action]
             info = reward.agent_info
-            q[i], t[i] = -info['q_y']-info['t_y']
+            q[i], t[i] = info['q_y'], info['t_y']
             max_Q_y[i] = info['max_Q_y']
             max_Q_x_d[i] = info['max_Q_x_d']
 
@@ -32,7 +33,8 @@ class MaHybridQ(HybridQ):
             max_Q_y.sum() - max_Q_x_d.sum()
         self.reward_shape = 0
         # update Eligibility Trac
-        self.Trace *= self.discount_trace
+        for trace in self.Trace.values():
+            trace *= self.discount_trace
         for i in range(num_rewards):
             self.Trace[x[i]][dest[i]] += \
                 self._gradient(x[i], dest[i], y_idx[i])
