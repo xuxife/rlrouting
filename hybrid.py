@@ -35,6 +35,8 @@ class PolicyGradient(Policy):
         self.Theta[x][dest] += lrp * gradient * \
             (r + self.discount * max_Q_y - max_Q_x_d)
 
+    def _update_entropy(self, r, lr, softmax):
+        return r - lr * (softmax * np.log2(softmax)).sum()
 
 class HybridQ(PolicyGradient, Qroute):
     attrs = Qroute.attrs | PolicyGradient.attrs
@@ -55,7 +57,7 @@ class HybridQ(PolicyGradient, Qroute):
             r, info, x, y, dest = self._extract(reward)
             softmax = self._softmax(x, dest)
             if self.add_entropy:
-                r -= lr['e'] * (softmax*np.log2(softmax)).sum()
+                r = self._update_entropy(r, lr['e'], softmax)
             self._update_qtable(r, x, y, dest, info['max_Q_y'], lr['q'])
             self._update_theta(
                 r, x, y, dest, info['max_Q_y'], info['max_Q_x_d'], lr['p'], softmax=softmax)
@@ -83,7 +85,7 @@ class HybridCQ(PolicyGradient, CQ):
             r_f, info, x, y, dest = self._extract(reward)
             softmax_f = self._softmax(x, dest)
             if self.add_entropy:
-                r_f -= lr['e'] * np.log2(softmax_f[self.action_idx[x][y]])
+                r_f = self._update_entropy(r_f, lr['e'], softmax_f)
             self._update_qtable(r_f, x, y, dest, info['C_f'], info['max_Q_f'])
             self._update_theta(
                 r_f, x, y, dest, info['max_Q_y'], info['max_Q_x_d'], lr['p'], softmax=softmax_f)
@@ -120,8 +122,8 @@ class HybridCDRQ(PolicyGradient, CDRQ):
             softmax_f = self._softmax(x, dest)
             softmax_b = self._softmax(y, source)
             if self.add_entropy:
-                r_f -= lr['e'] * np.log2(softmax_f[self.action_idx[x][y]])
-                r_b -= lr['e'] * np.log2(softmax_b[self.action_idx[y][x]])
+                r_f = self._update_entropy(r_f, lr['e'], softmax_f)
+                r_b = self._update_entropy(r_b, lr['e'], softmax_b)
             # forward update
             self._update_qtable(r_f, x, y, dest, info['C_f'], info['max_Q_f'])
             self._update_theta(
