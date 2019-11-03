@@ -142,19 +142,6 @@ class Node:
             Reward: Reward of this action.
             None if no action is taken
         """
-        # BackPressure Mode
-        if self.mode == 'bp' and len(self.queue) > 0:
-            action, dest = self.agent.choose(self.ID, filter(
-                lambda n: self.sent[n] < self.network.bandwidth, self.sent.keys()))
-            if action is None:
-                return None
-            p = next(p for p in self.queue if p.dest == dest)
-            self.queue.remove(p)
-            self._send_packet(p, action)
-            self.agent.send(self.ID, dest)
-            return Reward(self.ID, p, action, {})
-
-        # Default Mode
         i = 0
         while i < len(self.queue):
             dest = self.queue[i].dest
@@ -196,8 +183,8 @@ class Network:
         nodes (Dict[Int, Node]): An ordered dictionary of all nodes in this network.
         links (Dict[Int, List[Int]]): lists of connected nodes' ID.
         agent (:obj:): bind an agent, which follows class `Policy`
-        mode (string): Network mode, 
-            None -> Default mode, 'dual' -> Duality mode, 'bp' -> BackPressure mode
+        mode (string): Network mode,
+            None -> Default mode, 'dual' -> Duality mode
         event_queue (List[Event]): A queue of following happen events.
         all_packets (int): The total number of packets in this simulation.
         end_packets (int): The packets already ends in its destination.
@@ -242,8 +229,6 @@ class Network:
             node.queue = []
             for neighbor in node.sent:
                 node.sent[neighbor] = 0
-        if self.mode == 'bp':
-            self.agent.reset()
 
     def read_network(self, file):
         self.projection = {}  # project from file identity to node ID
