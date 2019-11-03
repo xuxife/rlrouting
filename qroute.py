@@ -4,7 +4,7 @@ from base_policy import Policy
 
 
 class Qroute(Policy):
-    attrs = Policy.attrs | set(['Qtable'])
+    attrs = Policy.attrs | set(['Qtable', 'discount'])
 
     def __init__(self, network, initQ=0, discount=0.99):
         super().__init__(network)
