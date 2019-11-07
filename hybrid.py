@@ -52,15 +52,14 @@ class HybridQ(PolicyGradient, Qroute):
             'max_Q_x_d': self.Qtable[source][packet.dest].max(),
         }
 
-    def learn(self, rewards, lr={'q': 0.1, 'p': 0.1, 'e': 0.1}):
-        for reward in rewards:
-            r, info, x, y, dest = self._extract(reward)
-            softmax = self._softmax(x, dest)
-            if self.add_entropy:
-                r = self._update_entropy(r, lr['e'], softmax)
-            self._update_qtable(r, x, y, dest, info['max_Q_y'], lr['q'])
-            self._update_theta(
-                r, x, y, dest, info['max_Q_y'], info['max_Q_x_d'], lr['p'], softmax=softmax)
+    def _update(self, reward, lr={'q': 0.1, 'p': 0.1, 'e': 0.1}):
+        r, info, x, y, dest = self._extract(reward)
+        softmax = self._softmax(x, dest)
+        if self.add_entropy:
+            r = self._update_entropy(r, lr['e'], softmax)
+        self._update_qtable(r, x, y, dest, info['max_Q_y'], lr['q'])
+        self._update_theta(
+            r, x, y, dest, info['max_Q_y'], info['max_Q_x_d'], lr['p'], softmax=softmax)
 
 
 class HybridCQ(PolicyGradient, CQ):
@@ -69,7 +68,7 @@ class HybridCQ(PolicyGradient, CQ):
     def __init__(self, network, initQ=0, initP=0, decay=0.9, add_entropy=False, discount=0.99):
         PolicyGradient.__init__(self, network, initP,
                                 add_entropy=add_entropy, discount=discount)
-        CDRQ.__init__(self, network, decay=decay,
+        CQ.__init__(self, network, decay=decay,
                       initQ=initQ, discount=discount)
 
     def get_info(self, source, action, packet):
@@ -80,17 +79,14 @@ class HybridCQ(PolicyGradient, CQ):
             'max_Q_x_d': self.Qtable[source][packet.dest].max(),
         }
 
-    def learn(self, rewards, lr={'p': 0.1, 'e': 0.1}):
-        for reward in rewards:
-            r_f, info, x, y, dest = self._extract(reward)
-            softmax_f = self._softmax(x, dest)
-            if self.add_entropy:
-                r_f = self._update_entropy(r_f, lr['e'], softmax_f)
-            self._update_qtable(r_f, x, y, dest, info['C_f'], info['max_Q_f'])
-            self._update_theta(
-                r_f, x, y, dest, info['max_Q_y'], info['max_Q_x_d'], lr['p'], softmax=softmax_f)
-
-        self.confidence_decay()
+    def _update(self, reward, lr={'p': 0.1, 'e': 0.1}):
+        r_f, info, x, y, dest = self._extract(reward)
+        softmax_f = self._softmax(x, dest)
+        if self.add_entropy:
+            r_f = self._update_entropy(r_f, lr['e'], softmax_f)
+        self._update_qtable(r_f, x, y, dest, info['C_f'], info['max_Q_f'])
+        self._update_theta(
+            r_f, x, y, dest, info['max_Q_y'], info['max_Q_x_d'], lr['p'], softmax=softmax_f)
 
 
 class HybridCDRQ(PolicyGradient, CDRQ):
@@ -114,24 +110,20 @@ class HybridCDRQ(PolicyGradient, CDRQ):
             'max_Q_y_s': self.Qtable[action][packet.source].max(),
         }
 
-    def learn(self, rewards, lr={'f': 0.85, 'b': 0.95, 'p': 0.1, 'e': 0.1}):
-        for reward in rewards:
-            r_f, info, x, y, dest = self._extract(reward)
-            source = reward.packet.source
-            r_b = -info['q_x'] - info['t_x']
-            softmax_f = self._softmax(x, dest)
-            softmax_b = self._softmax(y, source)
-            if self.add_entropy:
-                r_f = self._update_entropy(r_f, lr['e'], softmax_f)
-                r_b = self._update_entropy(r_b, lr['e'], softmax_b)
-            # forward update
-            self._update_qtable(r_f, x, y, dest, info['C_f'], info['max_Q_f'])
-            self._update_theta(
-                r_f, x, y, dest, info['max_Q_f'], info['max_Q_x_f'], lr['p'], softmax=softmax_f)
-            # backward update
-            self._update_qtable(r_b, y, x, source,
-                                info['C_b'], info['max_Q_b'])
-            self._update_theta(
-                r_b, y, x, source, info['max_Q_b'], info['max_Q_y_s'], lr['p'], softmax=softmax_b)
-
-        self.confidence_decay()
+    def _update(self, reward, lr={'f': 0.85, 'b': 0.95, 'p': 0.1, 'e': 0.1}):
+        r_f, info, x, y, dst = self._extract(reward)
+        src = reward.packet.source
+        r_b = -info['q_x'] - info['t_x']
+        softmax_f = self._softmax(x, dst)
+        softmax_b = self._softmax(y, src)
+        if self.add_entropy:
+            r_f = self._update_entropy(r_f, lr['e'], softmax_f)
+            r_b = self._update_entropy(r_b, lr['e'], softmax_b)
+        # forward update
+        self._update_qtable(r_f, x, y, dst, info['C_f'], info['max_Q_f'])
+        self._update_theta(
+            r_f, x, y, dst, info['max_Q_f'], info['max_Q_x_f'], lr['p'], softmax=softmax_f)
+        # backward update
+        self._update_qtable(r_b, y, x, src, info['C_b'], info['max_Q_b'])
+        self._update_theta(
+            r_b, y, x, src, info['max_Q_b'], info['max_Q_y_s'], lr['p'], softmax=softmax_b)

@@ -1,11 +1,11 @@
 import numpy as np
 
-from hybrid import HybridQ
+from hybrid import *
 
 
 class MaHybridQ(HybridQ):
     """ Multi-agent Hybrid Q routing with Eligibility Traces """
-    attrs = HybridQ.attrs | set(['Trace'])
+    attrs = HybridQ.attrs | set(['discount_trace', 'Trace'])
 
     def __init__(self, network, initQ=0, initP=0, discount=0.99, discount_trace=0.6):
         super().__init__(network, initQ=initQ, initP=initP, discount=discount)
@@ -15,27 +15,23 @@ class MaHybridQ(HybridQ):
                       for k, v in self.Theta.items()}
 
     def learn(self, rewards, lr={'q': 0.1, 'p': 0.1}):
-        num_rewards = len(rewards)
-        q, t = np.zeros(num_rewards), np.zeros(num_rewards)
-        x, dest, y_idx = np.zeros(num_rewards, dtype=np.int), np.zeros(
-            num_rewards, dtype=np.int), np.zeros(num_rewards, dtype=np.int)
-        max_Q_y, max_Q_x_d = np.zeros(num_rewards), np.zeros(num_rewards)
+        r_len = len(rewards)
+        x, dest, y_idx = np.zeros(r_len, dtype=np.int), np.zeros(
+            r_len, dtype=np.int), np.zeros(r_len, dtype=np.int)
+        r, max_Q_y, max_Q_x_d = np.zeros(r_len), np.zeros(r_len), np.zeros(r_len)
         for i, reward in enumerate(rewards):
-            x[i], dest[i] = reward.source, reward.dest
-            y_idx[i] = self.action_idx[x[i]][reward.action]
-            info = reward.agent_info
-            q[i], t[i] = info['q_y'], info['t_y']
+            r[i], info, x[i], y, dest[i] = self._extract(reward)
+            y_idx[i] = self.action_idx[x][y]
             max_Q_y[i] = info['max_Q_y']
             max_Q_x_d[i] = info['max_Q_x_d']
 
-        r = - q - t
         delta = r.sum() + self.reward_shape + self.discount * \
             max_Q_y.sum() - max_Q_x_d.sum()
         self.reward_shape = 0
-        # update Eligibility Trac
+        # update Eligibility Trace
         for trace in self.Trace.values():
             trace *= self.discount_trace
-        for i in range(num_rewards):
+        for i in range(r_len):
             self.Trace[x[i]][dest[i]] += \
                 self._gradient(x[i], dest[i], y_idx[i])
             # update Q table

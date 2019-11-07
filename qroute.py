@@ -42,20 +42,24 @@ class Qroute(Policy):
         self.Qtable[x][d][y_idx] += lr * \
             (r + self.discount * max_Q_y - old_score)
 
-    def learn(self, rewards, lr={'q': 0.1}):
+    def _update(self, reward, lr={'q': 0.1}):
+        " update agent once/one turn "
+        r, info, x, y, d = self._extract(reward)
+        self._update_qtable(r, x, y, d, info['max_Q_y'], lr['q'])
+
+    def learn(self, rewards, lr={}):
         for reward in rewards:
-            r, info, x, y, d = self._extract(reward)
-            self._update_qtable(r, x, y, d, info['max_Q_y'], lr['q'])
+            self._update(reward, lr if lr else self._update.__defaults__[0])
 
 
 class CQ(Qroute):
-    attrs = Qroute.attrs | set(['confidence'])
+    attrs = Qroute.attrs | set(['decay', 'confidence'])
 
     def __init__(self, network, decay=0.9, initQ=0, discount=0.9):
         super().__init__(network, initQ, discount=discount)
         self.decay = decay
-        self.confidence = {x: np.zeros_like(
-            self.Qtable[x]) for x in self.Qtable.keys()}
+        self.confidence = {x: np.zeros_like(self.Qtable[x], dtype=np.float64)
+                            for x in self.Qtable.keys()}
         # the decision of sending to the destination is undoubtedly correct
         for x, ys in self.links.items():
             # base case: C_x(z, y) = 1 if z == y else 0
@@ -79,10 +83,12 @@ class CQ(Qroute):
         # counteract the effect of confidence_decay()
         self.confidence[x][d][y_idx] /= self.decay
 
+    def _update(self, reward, lr={}):
+        r, info, x, y, d = self._extract(reward)
+        self._update_qtable(r, x, y, d, info['C_f'], info['max_Q_f'])
+
     def learn(self, rewards, lr={}):
-        for reward in rewards:
-            r, info, x, y, d = self._extract(reward)
-            self._update_qtable(r, x, y, d, info['C_f'], info['max_Q_f'])
+        super().learn(rewards, lr)
         self.confidence_decay()
 
     def confidence_decay(self):
@@ -103,15 +109,9 @@ class CDRQ(CQ):
             'C_f': self.confidence[action][packet.dest][z_idx],
         }
 
-    def learn(self, rewards, lr={}):
-        for reward in rewards:
-            r_f, info, x, y, dest = self._extract(reward)
-            " forward "
-            self._update_qtable(r_f, x, y, dest, info['C_f'], info['max_Q_f'])
-            " backward "
-            r_b = -info['q_x']-info['t_x']
-            source = reward.packet.source
-            self._update_qtable(r_b, y, x, source,
-                                info['C_b'], info['max_Q_b'])
-
-        self.confidence_decay()
+    def _update(self, reward, lr={}):
+        r_f, info, x, y, dst = self._extract(reward)
+        self._update_qtable(r_f, x, y, dst, info['C_f'], info['max_Q_f']) # forward
+        r_b = -info['q_x']-info['t_x']
+        src = reward.packet.source
+        self._update_qtable(r_b, y, x, src, info['C_b'], info['max_Q_b']) # backward
