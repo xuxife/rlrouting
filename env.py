@@ -229,6 +229,7 @@ class Network:
             node.queue = []
             for neighbor in node.sent:
                 node.sent[neighbor] = 0
+        self.agent.clean()
 
     def read_network(self, file):
         self.projection = {}  # project from file identity to node ID
