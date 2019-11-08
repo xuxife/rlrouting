@@ -58,15 +58,16 @@ class CQ(Qroute):
     def __init__(self, network, decay=0.9, initQ=0, discount=0.9):
         super().__init__(network, initQ, discount=discount)
         self.decay = decay
+        self.confidence = {x: np.zeros_like(table, dtype=np.float64)
+                            for x, table in self.Qtable.items()}
         self.clean()
 
     def clean(self):
-        self.confidence = {x: np.zeros_like(table, dtype=np.float64)
-                            for x, table in self.Qtable.items()}
-        # the decision of sending to the destination is undoubtedly correct
-        for x, ys in self.links.items():
+        for x, conf in self.confidence.items():
+            conf.fill(0.0) # empty confidence
+            # the decision of sending to the destination is undoubtedly correct
             # base case: C_x(z, y) = 1 if z == y else 0
-            self.confidence[x][ys] = np.eye(len(ys))
+            conf[self.links[x]] = np.eye(conf.shape[1])
 
     def get_info(self, source, action, packet):
         z_idx, max_Q_f = self.choose(action, packet.dest, idx=True)
