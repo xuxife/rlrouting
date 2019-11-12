@@ -155,11 +155,13 @@ class Node:
                 agent_info = self.agent.get_info(self.ID, action, p)
                 # set the environment rewards
                 # q: queuing delay; t: transmission delay
-                # agent_info['q_y'] = max(
-                #     1, len(self.network.nodes[action].queue))
-                agent_info['q_y'] = self.clock.t - p.start_queue
-                agent_info['t_y'] = 1
-                if self.mode == 'dual':
+                if self.mode != 'dual':
+                    agent_info['q_y'] = self.clock.t - p.start_queue
+                    agent_info['t_y'] = 1
+                else: # dual mode
+                    agent_info['q_y'] = max(
+                        1, len(self.network.nodes[action].queue))
+                    agent_info['t_y'] = 0
                     agent_info['q_x'] = max(1, len(self.queue))
                     agent_info['t_x'] = 0
                 return Reward(self.ID, p, action, agent_info)
