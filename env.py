@@ -106,20 +106,12 @@ class Node:
     def __repr__(self):
         return f"Node<{self.ID}, queue: {self.queue}, sent: {self.sent}>"
 
-    def end(self, packet):
-        """ a packet ends at this node """
-        logging.debug(f"{self.clock}: {packet} ends in {self.ID}")
-        self.network.active_packets -= 1
-        self.network.end_packets += 1
-        self.network.route_time += self.clock.t - packet.birth
-        self.network.hops += packet.hops
-        del packet
-
     def receive(self, packet):
         """ receive a packet """
         logging.debug(f"{self.clock}: {self.ID} receives {packet}")
         if self.ID == packet.dest:
-            self.end(packet)
+            logging.debug(f"{self.clock}: {packet} ends in {self.ID}")
+            self.network.end_packet(packet)
         else:
             packet.start_queue = self.clock.t
             self.queue.append(packet)
@@ -204,6 +196,7 @@ class Network:
         self.agent = Policy(self)
         self.is_drop = is_drop
         self.clock = Clock(0)
+        self.sample, self._sample_idx = [], 0
 
         if read_func is None:
             self.read_network(file)
@@ -275,13 +268,23 @@ class Network:
         for packet in packets:
             self.nodes[packet.source].receive(packet)
 
-    def step(self, duration, penalty=0):
+    def end_packet(self, packet):
+        """ a packet ends at this node """
+        self.active_packets -= 1
+        self.end_packets += 1
+        if len(self.sample) > 0:
+            self.sample[min(self._sample_idx, len(self.sample)-1)] = self.clock.t - packet.birth
+            self._sample_idx += 1
+        self.route_time += self.clock.t - packet.birth
+        self.hops += packet.hops
+        del packet
+
+    def step(self, duration):
         """ step runs the network forward `duration`
         one sending and one agent learning
 
         Args:
             duration (int, duration): The duration of one step.
-            penalty  (int, float)   : The penalty of dropping a packet
 
         Returns:
             List[Reward]: A list of rewards from sending events happended in the timeslot.
@@ -299,7 +302,7 @@ class Network:
                 # drop the packet if too many hops
                 self.drop_packets += 1
                 self.active_packets -= 1
-                self.agent.drop_penalty(e, penalty=penalty)
+                self.agent.drop_penalty(e)
                 continue
             self.clock.t = e.arrive_time
             self.nodes[e.to_node].receive(e.packet)
@@ -307,7 +310,7 @@ class Network:
         self.clock.t = end_time
         return rewards
 
-    def train(self, duration, lambd, slot=1, freq=1, lr={}, penalty=0, droprate=False):
+    def train(self, duration, lambd, slot=1, freq=1, lr={}, droprate=False, hop=False):
         """ train process the whole network forward
         new packet arriving at `lambd` (s^-1) rate
         call `step` to send and learn from rewards
@@ -320,28 +323,52 @@ class Network:
             lr (Dict[str, float]): learning rate for Qtable or policy-table
             penalty (float): drop penalty
             droprate (bool): whether return droprate or not
+            hop (bool): whether return hop times or not
 
         Returns:
-            route_time (List[Real]): the vector of routing time in this training duration.
-            drop_rate (List[Real]): the vector of packet-drop rate in this train.
+            Result (Dict[Str, List[Real]]):
+                route_time (List[Real]): the vector of routing time in this training duration.
+                drop_rate (List[Real]): the vector of packet-drop rate in this train.
         """
         step_num = int(duration / slot)
-        route_time = np.zeros(step_num)
+        result = {'route_time': np.zeros(step_num)}
         if droprate:
-            drop_rate = np.zeros(step_num)
+            result['droprate'] = np.zeros(step_num)
+        if hop:
+            result['hop'] = np.zeros(step_num)
         for i in range(step_num):
             self.inject(self.new_packet(lambd*slot))
             for _ in range(freq):
-                r = self.step(slot, penalty=penalty)
+                r = self.step(slot)
                 if r is not None:
                     if lr:
                         self.agent.learn(r, lr=lr)
                     else:
                         self.agent.learn(r)
-            route_time[i] = self.ave_route_time
+            result['route_time'][i] = self.ave_route_time()
             if droprate:
-                drop_rate[i] = self.drop_rate
-        return (route_time, drop_rate) if droprate else route_time
+                result['droprate'][i] = self.drop_rate()
+            if hop:
+                result['hop'][i] = self.ave_hops()
+        return result
+
+    def sample_route_time(self, size, lambd, slot=1, freq=1, lr={}):
+        self.sample = np.zeros(size)
+        self._sample_idx = 0
+        while self._sample_idx < size:
+            self.inject(self.new_packet(lambd * slot))
+            for _ in range(freq):
+                r = self.step(slot)
+                if r is None:
+                    continue
+                if lr:
+                    self.agent.learn(r, lr=lr)
+                else:
+                    self.agent.learn(r)
+        sample = self.sample
+        self.sample = []
+        return sample
+
 
     @property
     def ave_hops(self):
