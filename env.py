@@ -345,11 +345,11 @@ class Network:
                         self.agent.learn(r, lr=lr)
                     else:
                         self.agent.learn(r)
-            result['route_time'][i] = self.ave_route_time()
+            result['route_time'][i] = self.ave_route_time
             if droprate:
-                result['droprate'][i] = self.drop_rate()
+                result['droprate'][i] = self.drop_rate
             if hop:
-                result['hop'][i] = self.ave_hops()
+                result['hop'][i] = self.ave_hops
         return result
 
     def sample_route_time(self, size, lambd, slot=1, freq=1, lr={}):
