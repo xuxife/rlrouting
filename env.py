@@ -353,6 +353,13 @@ class Network:
         return result
 
     def sample_route_time(self, size, lambd, slot=1, freq=1, lr={}):
+        """
+        sample_route_time is an alternative for `train`.
+        `train` returns various information (in dictionary) in a specific **time duration**.
+        Due to different "load setting", the numbers of arrived packages in a same duration can be different.
+        `sample_route_time` runs the network as `train` does, however stops when the number of arrived packages reaches `size`.
+        Or say, it returns a `size`-long array, which records 'routing_time' of arrived packages.
+        """
         self.sample = np.zeros(size)
         self._sample_idx = 0
         while self._sample_idx < size:
