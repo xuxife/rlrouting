@@ -300,8 +300,13 @@ class Network:
         Returns:
             List[Reward]: A list of rewards from sending events happended in the timeslot.
         """
-        rewards = list(filter(None, [node.send()
-                                     for node in self.nodes.values()]))
+        # rewards = list(filter(None, [node.send()
+        #                              for node in self.nodes.values()]))
+        rewards = []
+        for node in self.nodes.values():
+            r = node.send() # r: List[Reward]
+            if r: # len(r) > 0
+                rewards += r
 
         end_time = self.clock.t + duration
         next_event = nsmallest(1, self.event_queue)
