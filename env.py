@@ -9,7 +9,7 @@ from base_policy import Policy
 class Packet:
     """
     Args:
-        source, dest (int): The start/destination node's ID.
+        source, dest (int): The start/end node's ID.
         birth (int): When the packet is generated.
 
     Attributes:
@@ -32,7 +32,7 @@ class Event:
     """ Event records a packet passing through a connection.
 
     Args:
-        packet      (Packet): Which packet is being delivering of this event.
+        packet      (Packet): Which packet is being delivered.
         from_node   (int)   : Where the delivery begins.
         to_node     (int)   : Where the delivery ends, the destination.
         arrive_time (int)   : When the corresponding packet would arrive to_node.
@@ -55,9 +55,10 @@ class Reward:
     """ Reward defines the backward reward from environment (what Network.step returns)
 
     Attributes:
-        source, dest (int): Where the packet from/destination
-        packet (Packet): which packet generates the reward
-        action (int): Which neighbor the `source` chose
+        source (int): Where the packet sent from.
+        dest   (int): Where the packet finally ends (destination).
+        packet (Packet): the corresponding packet.
+        action (int): the action taken by the `source` node (which neighbor to send to).
         agent_info (:obj:): Extra information from agent.get_info
     """
 
@@ -73,6 +74,9 @@ class Reward:
 
 
 class Clock:
+    """
+    A dummy class for synchronizing time among nodes in one Network.
+    """
     def __init__(self, now):
         self.t = now
 
@@ -81,17 +85,18 @@ class Clock:
 
 
 class Node:
-    """ Node is the unit actor in a network.
+    """ Node is the unit in a network.
 
     Attributes:
-        queue (List[Packet]): Where Packets waiting for being delivered,
-        sent  (Dict[int, Packet]): An pseudo stage where Packets already sent but not arrive the next node.
+        queue (List[Packet]): Where Packets waiting for being delivered.
+        sent  (Dict[int, int]): An pseudo stage where Packets already sent but not arrive the next node yet.
+            For instance, 'thisNode.sent[9] = 2' means 'the directed connection between `thisNode` and Node 9 has 2 packets under delivery'
     """
 
     def __init__(self, ID, clock, network):
         self.ID = ID
         self.clock = clock
-        self.queue = []
+        self.queue = [] # Priority Queue
         self.sent = {}
         self.network = network
 
@@ -109,16 +114,20 @@ class Node:
     def receive(self, packet):
         """ receive a packet """
         logging.debug(f"{self.clock}: {self.ID} receives {packet}")
-        if self.ID == packet.dest:
+        if self.ID == packet.dest: # the packet ends here
             logging.debug(f"{self.clock}: {packet} ends in {self.ID}")
             self.network.end_packet(packet)
         else:
+            # enter queue and wait for being deliveried.
             packet.start_queue = self.clock.t
             self.queue.append(packet)
-            self.agent.receive(self.ID, packet.dest)
+            self.agent.receive(self.ID, packet.dest) # for some algorithms need to know a packet received.
 
     def _send_packet(self, p, action):
-        " send `packet` to `action` "
+        """
+        a sub-function for self.send().
+        send Packet `p` to Node `action`(int)
+        """
         logging.debug(f"{self.clock}: {self.ID} sends {p} to {action}")
         p.hops += 1
         self.sent[action] += 1
@@ -131,11 +140,12 @@ class Node:
         agent.choose determines the action/next node
 
         Returns:
-            Reward: Reward of this action.
-            None if no action is taken
+            List[Reward]
         """
         i = 0
-        while i < len(self.queue):
+        rewards = []
+        is_action_avaliable = {a: True for a in self.network.links[self.ID]}
+        while i < len(self.queue) and any(is_action_avaliable.values()):
             dest = self.queue[i].dest
             action = self.agent.choose(self.ID, dest)
             # if the connection to chosen `action` is full, skip the packet and send the next packet in queue
@@ -156,10 +166,11 @@ class Node:
                     agent_info['t_y'] = 0
                     agent_info['q_x'] = max(1, len(self.queue))
                     agent_info['t_x'] = 0
-                return Reward(self.ID, p, action, agent_info)
+                rewards.append(Reward(self.ID, p, action, agent_info))
             else:
+                is_action_avaliable[action] = False
                 i += 1
-        return None
+        return rewards
 
 
 class Network:
