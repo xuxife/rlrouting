@@ -108,6 +108,17 @@ class Node:
     def mode(self):
         return self.network.mode
 
+    @property
+    def send_mode(self):
+        return self.network.send_mode
+
+    @property
+    def links(self):
+        return self.network.links[self.ID]
+
+    def is_avaliable(self, action):
+        return self.sent[action] < self.network.bandwidth
+
     def __repr__(self):
         return f"Node<{self.ID}, queue: {self.queue}, sent: {self.sent}>"
 
@@ -143,34 +154,57 @@ class Node:
             List[Reward]
         """
         i = 0
+        one_ite = False # whether there is a whole iteration
         rewards = []
-        is_action_avaliable = {a: True for a in self.network.links[self.ID]}
-        while i < len(self.queue) and any(is_action_avaliable.values()):
+        avaliable_path = np.array( # some condition to check path avaliable
+            [self.is_avaliable(i) for i in self.links], dtype=bool)
+        while i < len(self.queue) and any(avaliable_path):
             dest = self.queue[i].dest
-            action = self.agent.choose(self.ID, dest)
-            # if the connection to chosen `action` is full, skip the packet and send the next packet in queue
-            if self.sent[action] < self.network.bandwidth:
-                p = self.queue.pop(i)
-                self._send_packet(p, action)
-                self.agent.send(self.ID, dest)
-                # then build Reward
-                agent_info = self.agent.get_info(self.ID, action, p)
-                # set the environment rewards
-                # q: queuing delay; t: transmission delay
-                if self.mode != 'dual':
-                    agent_info['q_y'] = self.clock.t - p.start_queue
-                    agent_info['t_y'] = 1
-                else: # dual mode
-                    agent_info['q_y'] = max(
-                        1, len(self.network.nodes[action].queue))
-                    agent_info['t_y'] = 0
-                    agent_info['q_x'] = max(1, len(self.queue))
-                    agent_info['t_x'] = 0
-                rewards.append(Reward(self.ID, p, action, agent_info))
+            if self.send_mode == "always_best":
+                # if the connection to chosen `action` is full, skip the packet and send the next packet in queue
+                action = self.agent.choose(self.ID, dest)
+            elif self.send_mode == "always_fifo":
+                action = self.agent.choose(self.ID, dest, avaliable_path)
+            elif self.send_mode == "hybrid":
+                if one_ite == False:
+                    action = self.agent.choose(self.ID, dest)
+                else:
+                    action = self.agent.choose(self.ID, dest, avaliable_path)
+                
             else:
-                is_action_avaliable[action] = False
-                i += 1
+                return []
+            if action is not None and avaliable_path[action]:
+                next_node = self.links[action]
+                p = self.queue.pop(i)
+                self._send_packet(p, next_node)
+                self.agent.send(self.ID, dest)
+                avaliable_path[action] = self.is_avaliable(next_node)
+                # then build Reward
+                rewards.append(self._build_reward(p, next_node))
+            else:
+                if self.send_mode == "hybrid" and i == (len(self.queue) - 1) and one_ite == False:
+                    i = 0
+                    one_ite = True
+                else:
+                    i += 1
+
         return rewards
+
+    def _build_reward(self, packet, action):
+        agent_info = self.agent.get_info(self.ID, action, packet)
+        # set the environment rewards
+        # q: queuing delay; t: transmission delay
+        if self.mode != 'dual':
+            agent_info['q_y'] = self.clock.t - packet.start_queue
+            agent_info['t_y'] = 1
+        else: # dual mode
+            agent_info['q_y'] = max(
+                1, len(self.network.nodes[action].queue))
+            agent_info['t_y'] = 0
+            agent_info['q_x'] = max(1, len(self.queue))
+            agent_info['t_x'] = 0
+        return Reward(self.ID, packet, action, agent_info)
+
 
 
 class Network:
@@ -199,9 +233,10 @@ class Network:
         route_time (int): The total routing time of all ended packets.
     """
 
-    def __init__(self, file, bandwidth=3, transtime=1, is_drop=False, read_func=None):
+    def __init__(self, file, bandwidth=3, transtime=1, send_mode="always_best", is_drop=False, read_func=None):
         self.bandwidth = bandwidth
         self.transtime = transtime
+        self.send_mode = send_mode
         self.nodes = OrderedDict()
         self.links = OrderedDict()
         self.agent = Policy(self)

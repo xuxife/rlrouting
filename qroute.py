@@ -4,11 +4,12 @@ from base_policy import Policy
 
 
 class Qroute(Policy):
-    attrs = Policy.attrs | set(['Qtable', 'discount'])
+    attrs = Policy.attrs | set(['Qtable', 'discount', 'threshold'])
 
-    def __init__(self, network, initQ=0, discount=0.99):
+    def __init__(self, network, initQ=0, discount=0.99, threshold=0.1):
         super().__init__(network)
         self.discount = discount
+        self.threshold = threshold
         self.Qtable = {x: np.random.normal(
             initQ, 1, (len(self.links), len(ys)))
             for x, ys in self.links.items()}
@@ -18,12 +19,15 @@ class Qroute(Policy):
             # Q_x(z, y) = -1 if z == y else 0
             table[self.links[x]] = -np.eye(table.shape[1])
 
-    def choose(self, source, dest, idx=False):
+    def choose(self, source, dest, avaliable_path=slice(None), idx=False):
         scores = self.Qtable[source][dest]
-        # score_max = scores.max()
-        # choice = np.random.choice(np.argwhere(scores == score_max).flatten())
-        choice = np.argmax(scores)
-        return (choice, scores.max()) if idx else self.links[source][choice]
+        if idx:
+            return np.argmax(scores), scores.max() # only for agent updating
+        else:
+            i = np.argmax(scores[avaliable_path])
+            idx = self.action_idx[source][self.links[source][avaliable_path][i]]
+            return idx
+            # return idx if np.exp(scores[idx]) / np.exp(scores).sum() > self.threshold else None
 
     def get_info(self, source, action, packet):
         return {'max_Q_y': self.Qtable[action][packet.dest].max()}
@@ -119,3 +123,23 @@ class CDRQ(CQ):
         r_b = -info['q_x']-info['t_x']
         src = reward.packet.source
         self._update_qtable(r_b, y, x, src, info['C_b'], info['max_Q_b']) # backward
+
+        
+class DRQ(Qroute):
+    def get_info(self, source, action, packet):
+        w_idx, max_Q_b = self.choose(source, packet.source, idx=True)
+        z_idx, max_Q_f = self.choose(action, packet.dest, idx=True)
+        return {
+            'max_Q_b': max_Q_b,
+            'max_Q_f': max_Q_f,
+        }
+
+    def _update(self, reward, lr={}):
+        r_f, info, x, y, dst = self._extract(reward)
+        self._update_qtable(r_f, x, y, dst, info['C_f'], info['max_Q_f']) # forward
+        r_b = -info['q_x']-info['t_x']
+        src = reward.packet.source
+        self._update_qtable(r_b, y, x, src, info['C_b'], info['max_Q_b']) # backward
+
+
+        
