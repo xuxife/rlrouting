@@ -21,7 +21,7 @@ class MaHybridQ(HybridQ):
         r, max_Q_y, max_Q_x_d = np.zeros(r_len), np.zeros(r_len), np.zeros(r_len)
         for i, reward in enumerate(rewards):
             r[i], info, x[i], y, dest[i] = self._extract(reward)
-            y_idx[i] = self.action_idx[x][y]
+            y_idx[i] = self.action_idx[x[i]][y]
             max_Q_y[i] = info['max_Q_y']
             max_Q_x_d[i] = info['max_Q_x_d']
 
@@ -45,6 +45,6 @@ class MaHybridQ(HybridQ):
     def __repr__(self):
         return "<MultiAgent discount:{} discount_trace:{}>".format(self.discount, self.discount_trace)
 
-    def clean_trace(self):
+    def clean(self):
         for trace in self.Trace.values():
             trace.fill(0.0)

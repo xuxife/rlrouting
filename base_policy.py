@@ -34,6 +34,10 @@ class Policy:
         " learn and update tables from rewards given "
         pass
 
+    def clean(self):
+        " called by the environment when it's resetted "
+        pass
+
     def receive(self, source, dest):
         " [optional] define what the agent should do when a packet is received by a node "
         pass
