@@ -19,15 +19,12 @@ class Qroute(Policy):
             # Q_x(z, y) = -1 if z == y else 0
             table[self.links[x]] = -np.eye(table.shape[1])
 
-    def choose(self, source, dest, avaliable_path=slice(None), idx=False):
+    def choose(self, source, dest, idx=False):
         scores = self.Qtable[source][dest]
-        if idx:
-            return np.argmax(scores), scores.max() # only for agent updating
+        if idx: # only for agent updating
+            return np.argmax(scores), scores.max()
         else:
-            i = np.argmax(scores[avaliable_path])
-            idx = self.action_idx[source][self.links[source][avaliable_path][i]]
-            return idx
-            # return idx if np.exp(scores[idx]) / np.exp(scores).sum() > self.threshold else None
+            return self.links[source][np.argmax(scores)]
 
     def get_info(self, source, action, packet):
         return {'max_Q_y': self.Qtable[action][packet.dest].max()}
