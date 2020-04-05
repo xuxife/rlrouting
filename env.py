@@ -78,26 +78,35 @@ class Node:
         sent  (Dict[int, int]): An pseudo stage where Packets already sent but not arrive the next node yet.
             For instance, 'thisNode.sent[9] = 2' means 'the directed connection between `thisNode` and Node 9 has 2 packets under delivery'
     """
-
-    def __init__(self, ID, clock, network):
+    def __init__(self, ID, network):
         self.ID = ID
-        self.queue = [] # Priority Queue
-        self.sent = {}
         self.network = network
+        self.reset()
+
+        self.set_mode(None)
+
+    def set_mode(self, mode):
+        if mode is None:
+            self.send = self._send_default
+            self._build_info = self._build_info_default
+        elif mode == 'bp':
+            self.send = self._send_bp
+            self._build_info = self._build_info_default
+        elif mode == 'dual':
+            self.send = self._send_default
+            self._build_info = self._build_info_dual
+
+    def reset(self):
+        self.queue = []  # Priority Queue
+        self.sent = dict.fromkeys(self.links, 0)
+
+    @property
+    def clock(self):
+        return self.network.clock
 
     @property
     def agent(self):
-        return self.network.agent
-
-    @property
-    def mode(self):
-        return self.network.mode
-
-    @property
-    def send_mode(self):
-        return self.network.send_mode
-    def clock(self):
-        return self.network.clock
+        return self.network._agent
 
     @property
     def links(self):
@@ -112,14 +121,16 @@ class Node:
     def receive(self, packet):
         """ receive a packet """
         logging.debug(f"{self.clock}: {self.ID} receives {packet}")
-        if self.ID == packet.dest: # the packet ends here
+        if self.ID == packet.dest:  # the packet ends here
             logging.debug(f"{self.clock}: {packet} ends in {self.ID}")
             self.network.end_packet(packet)
         else:
             # enter queue and wait for being deliveried.
             packet.start_queue = self.clock
             self.queue.append(packet)
-            self.agent.receive(self.ID, packet.dest) # for some algorithms need to know a packet received.
+            self.agent.receive(
+                self.ID, packet.dest
+            )  # for some algorithms need to know a packet received.
 
     def _send_packet(self, p, action):
         """
@@ -133,7 +144,22 @@ class Node:
         heappush(self.network.event_queue,
                  Event(p, self.ID, action, self.clock + p.trans_time))
 
-    def send(self):
+    def _build_info_default(self, agent_info, packet, action):
+        # set the environment rewards
+        # q: queuing delay; t: transmission delay
+        agent_info['q_y'] = self.clock - packet.start_queue
+        agent_info['t_y'] = 1
+        return agent_info
+
+    def _build_info_dual(self, agent_info, packet, action):
+        # dual mode
+        agent_info['q_y'] = max(1, len(self.network.nodes[action].queue))
+        agent_info['t_y'] = 0
+        agent_info['q_x'] = max(1, len(self.queue))
+        agent_info['t_x'] = 0
+        return agent_info
+
+    def _send_default(self):
         """ Send a packet in queue order.
         agent.choose determines the action/next node
 
@@ -141,57 +167,45 @@ class Node:
             List[Reward]
         """
         i = 0
-        one_ite = False # whether there is a whole iteration
         rewards = []
-        avaliable_path = np.array( # some condition to check path avaliable
-            [self.is_avaliable(i) for i in self.links], dtype=bool)
+        avaliable_path = np.array(  # some condition to check path avaliable
+            [self.is_avaliable(i) for i in self.links],
+            dtype=bool)
         while i < len(self.queue) and any(avaliable_path):
             dest = self.queue[i].dest
-            if self.send_mode == "always_best":
-                # if the connection to chosen `action` is full, skip the packet and send the next packet in queue
-                action = self.agent.choose(self.ID, dest)
-            elif self.send_mode == "always_fifo":
-                action = self.agent.choose(self.ID, dest, avaliable_path)
-            elif self.send_mode == "hybrid":
-                if one_ite == False:
-                    action = self.agent.choose(self.ID, dest)
-                else:
-                    action = self.agent.choose(self.ID, dest, avaliable_path)
-                
-            else:
-                return []
-            if action is not None and avaliable_path[action]:
-                next_node = self.links[action]
+            # if the connection to chosen `action` is full, skip the packet and send the next packet in queue
+            action = self.agent.choose(self.ID, dest)
+            if action is not None and avaliable_path[self.agent.action_idx[self.ID][action]]:
                 p = self.queue.pop(i)
-                self._send_packet(p, next_node)
+                self._send_packet(p, action)
                 self.agent.send(self.ID, dest)
-                avaliable_path[action] = self.is_avaliable(next_node)
+                avaliable_path[self.agent.action_idx[self.ID][action]] = self.is_avaliable(action)
                 # then build Reward
-                rewards.append(self._build_reward(p, next_node))
+                agent_info = self.agent.get_info(self.ID, action, p)
+                agent_info = self._build_info(agent_info, p, action)
+                rewards.append(Reward(self.ID, p, action, agent_info))
             else:
-                if self.send_mode == "hybrid" and i == (len(self.queue) - 1) and one_ite == False:
-                    i = 0
-                    one_ite = True
-                else:
-                    i += 1
-
+                i += 1
         return rewards
 
-    def _build_reward(self, packet, action):
-        agent_info = self.agent.get_info(self.ID, action, packet)
-        # set the environment rewards
-        # q: queuing delay; t: transmission delay
-        if self.mode != 'dual':
-            agent_info['q_y'] = self.clock.t - packet.start_queue
-            agent_info['t_y'] = 1
-        else: # dual mode
-            agent_info['q_y'] = max(
-                1, len(self.network.nodes[action].queue))
-            agent_info['t_y'] = 0
-            agent_info['q_x'] = max(1, len(self.queue))
-            agent_info['t_x'] = 0
-        return Reward(self.ID, packet, action, agent_info)
-
+    def _send_bp(self):
+        i = 0
+        rewards = []
+        avaliable_path = [n for n in self.links if self.is_avaliable(n)]
+        while len(avaliable_path) > 0 and len(self.queue) > 0:
+            dests = self.agent.choose(self.ID, avaliable_path)
+            if not any(dests):
+                break
+            for dest, action in zip(dests, avaliable_path):
+                if dest is None:
+                    continue
+                p = next(p for p in self.queue if p.dest == dest)
+                self.queue.remove(p)
+                self._send_packet(p, action)
+                self.agent.send(self.ID, dest)
+                rewards.append(Reward(self.ID, p, action, {}))
+            avaliable_path = [n for n in self.links if self.is_avaliable(n)]
+        return rewards
 
 
 class Network:
@@ -218,27 +232,37 @@ class Network:
         hops (int): The number of total hops of all packets
         route_time (int): The total routing time of all ended packets.
     """
-
-    def __init__(self, file, bandwidth=3, transtime=1, send_mode="always_best", is_drop=False, read_func=None):
+    def __init__(self, file, bandwidth=1, transtime=1, is_drop=False):
         self.bandwidth = bandwidth
         self.transtime = transtime
-        self.send_mode = send_mode
         self.nodes = OrderedDict()
         self.links = OrderedDict()
-        self.agent = Policy(self)
         self.is_drop = is_drop
-        self.clock = Clock(0)
         self.sample, self._sample_idx = [], 0
 
         self.read_network(file)
+        for i in self.links.keys():
+            self.nodes[i] = Node(i, self)
 
-        self.clean()
+        self._agent = Policy(self)
+        self.reset()
+
+    @property
+    def agent(self):
+        return self._agent
 
     @property
     def mode(self):
-        return self.agent.mode
+        return self._agent.mode
 
-    def clean(self):
+    @agent.setter
+    def agent(self, new_agent):
+        if self.mode != new_agent.mode:
+            for node in self.nodes.values():
+                node.set_mode(new_agent.mode)
+        self._agent = new_agent
+
+    def reset(self):
         """ reset the network attributes """
         self.clock = 0
         self.event_queue = []
@@ -249,32 +273,28 @@ class Network:
         self.hops = 0
         self.route_time = 0
         for node in self.nodes.values():
-            node.queue = []
-            for neighbor in node.sent:
-                node.sent[neighbor] = 0
-        self.agent.clean()
+            node.reset()
+        self.agent.clean()  # tell agent the Network resetted
+        # NOT reset the agent
 
     def read_network(self, file):
-        self.projection = {}  # project from file identity to node ID
+        " read_network constructs the Network.links "
+        self.proj = {}  # project from file identity to node ID
         with open(file, 'r') as f:
             lines = [l.split() for l in f.readlines()]
         ID = 0
         for l in lines:
-            if l[0] == "1000":
-                self.projection[l[1]] = ID
-                self.nodes[ID] = Node(ID, self.clock, self)
+            if l[0] == "1000":  # declare a node
+                self.proj[l[1]] = ID
                 self.links[ID] = []
-                ID += 1
-            elif l[0] == "2000":
-                source, dest = self.projection[l[1]], self.projection[l[2]]
-                self.nodes[source].sent[dest] = 0
-                self.nodes[dest].sent[source] = 0
-                self.links[source].append(dest)
-                self.links[dest].append(source)
+                ID += 1  # increase ID
+            elif l[0] == "2000":  # delcare a connection
+                src, dst = self.proj[l[1]], self.proj[l[2]]
+                self.links[src].append(dst)
+                self.links[dst].append(src)
 
     def new_packet(self, lambd):
         """ Generates new packets following Poisson(lambd).
-
         Args:
             lambd (int, float): The Poisson distribution parameter.
         Returns:
@@ -286,7 +306,7 @@ class Network:
             source, dest = np.random.randint(0, nodes_num, size=2)
             while dest == source:  # assert: source != dest
                 dest = np.random.randint(0, nodes_num)
-            packets.append(Packet(source, dest, self.clock.t))
+            packets.append(Packet(source, dest, self.clock))
         return packets
 
     def inject(self, packets):
@@ -301,9 +321,10 @@ class Network:
         self.active_packets -= 1
         self.end_packets += 1
         if len(self.sample) > 0:
-            self.sample[min(self._sample_idx, len(self.sample)-1)] = self.clock.t - packet.birth
+            self.sample[min(self._sample_idx,
+                            len(self.sample) - 1)] = self.clock - packet.birth
             self._sample_idx += 1
-        self.route_time += self.clock.t - packet.birth
+        self.route_time += self.clock - packet.birth
         self.hops += packet.hops
         del packet
 
@@ -317,15 +338,13 @@ class Network:
         Returns:
             List[Reward]: A list of rewards from sending events happended in the timeslot.
         """
-        # rewards = list(filter(None, [node.send()
-        #                              for node in self.nodes.values()]))
         rewards = []
         for node in self.nodes.values():
-            r = node.send() # r: List[Reward]
-            if r: # len(r) > 0
+            r = node.send()  # r: List[Reward]
+            if r:  # len(r) > 0
                 rewards += r
 
-        end_time = self.clock.t + duration
+        end_time = self.clock + duration
         next_event = nsmallest(1, self.event_queue)
         while len(next_event) > 0 and next_event[0].arrive_time <= end_time:
             e = heappop(self.event_queue)
@@ -337,13 +356,20 @@ class Network:
                 self.active_packets -= 1
                 self.agent.drop_penalty(e)
                 continue
-            self.clock.t = e.arrive_time
+            self.clock = e.arrive_time
             self.nodes[e.to_node].receive(e.packet)
 
-        self.clock.t = end_time
+        self.clock = end_time
         return rewards
 
-    def train(self, duration, lambd, slot=1, freq=1, lr={}, droprate=False, hop=False):
+    def train(self,
+              duration,
+              lambd,
+              slot=1,
+              freq=1,
+              lr={},
+              droprate=False,
+              hop=False):
         """ train process the whole network forward
         new packet arriving at `lambd` (s^-1) rate
         call `step` to send and learn from rewards
@@ -370,7 +396,7 @@ class Network:
         if hop:
             result['hop'] = np.zeros(step_num)
         for i in range(step_num):
-            self.inject(self.new_packet(lambd*slot))
+            self.inject(self.new_packet(lambd * slot))
             for _ in range(freq):
                 r = self.step(slot)
                 if r is not None:
@@ -408,7 +434,6 @@ class Network:
         sample = self.sample
         self.sample = []
         return sample
-
 
     @property
     def ave_hops(self):
