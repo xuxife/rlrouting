@@ -19,8 +19,10 @@ class BP(Shortest):
         self.reset()
 
     def reset(self):
-        self.Q = {n: np.zeros(len(self.links), dtype=np.int)
-                  for n in self.links.keys()}
+        self.Q = {
+            n: np.zeros(len(self.links), dtype=np.int)
+            for n in self.links.keys()
+        }
 
     def receive(self, source, dest):
         self.Q[source][dest] += 1
@@ -37,23 +39,19 @@ class BP(Shortest):
         return np.zeros(len(self.links), dtype=np.bool)
 
     def choose(self, source, links):
-        action, dest = None, None
-        W = -np.inf
+        destinations = []  # .__len__ == len(links)
         for neighbor in links:
             diff = self.Q[source] - self.Q[neighbor]
-            dests = (diff > 0) & (self._is_phase2(source) | (
-                self.choice[source][:, self.action_idx[source][neighbor]]))
+            dests = (diff > 0) & (
+                self._is_phase2(source) |
+                (self.choice[source][:, self.action_idx[source][neighbor]]))
             # (diff > 0) ==> (self.Q[source] > 0)
+            diff[~dests] = 0
             if dests.any():
-                diff_max = diff[dests].max()
-                if diff_max > W:
-                    W = diff_max
-                    action = neighbor
-                    dest = next(i for i in self.links.keys()
-                                if diff[i] == diff_max)
-        if W <= 0:
-            return None, None
-        return action, dest
+                destinations.append(diff.argmax())
+            else:
+                destinations.append(None)
+        return destinations
 
 
 class LBP(BP):
@@ -63,14 +61,3 @@ class LBP(BP):
 
     def _is_phase2(self, source):
         return self.Q[source] > self.l_max
-
-
-class ABP(BP):
-    def __init__(self, network, a_max=10):
-        super().__init__(network)
-        self.nodes = network.nodes
-        self.a_max = a_max
-
-    def _is_phase2(self, source):
-        return np.array([self.nodes[source].clock.t - p.birth > self.a_max
-                         for p in self.nodes[source].queue], dtype=np.bool)
