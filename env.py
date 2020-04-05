@@ -16,7 +16,6 @@ class Packet:
         trans_time (int): Transmission time.
         hops (int): The number of hops.
     """
-
     def __init__(self, source, dest, birth):
         self.source = source
         self.dest = dest
@@ -37,7 +36,6 @@ class Event:
         to_node     (int)   : Where the delivery ends, the destination.
         arrive_time (int)   : When the corresponding packet would arrive to_node.
     """
-
     def __init__(self, packet, from_node, to_node, arrive_time):
         self.packet = packet
         self.from_node = from_node
@@ -55,13 +53,12 @@ class Reward:
     """ Reward defines the backward reward from environment (what Network.step returns)
 
     Attributes:
-        source (int): Where the packet sent from.
+        source (int): Where the packet sent from at the last step, NOT where the packet begins.
         dest   (int): Where the packet finally ends (destination).
-        packet (Packet): the corresponding packet.
         action (int): the action taken by the `source` node (which neighbor to send to).
+        packet (Packet): the corresponding packet.
         agent_info (:obj:): Extra information from agent.get_info
     """
-
     def __init__(self, source, packet, action, agent_info={}):
         self.source = source
         self.dest = packet.dest
@@ -71,17 +68,6 @@ class Reward:
 
     def __repr__(self):
         return f"Reward<{self.source}->{self.dest} by {self.action}>"
-
-
-class Clock:
-    """
-    A dummy class for synchronizing time among nodes in one Network.
-    """
-    def __init__(self, now):
-        self.t = now
-
-    def __str__(self):
-        return str(self.t)
 
 
 class Node:
@@ -95,7 +81,6 @@ class Node:
 
     def __init__(self, ID, clock, network):
         self.ID = ID
-        self.clock = clock
         self.queue = [] # Priority Queue
         self.sent = {}
         self.network = network
@@ -111,6 +96,8 @@ class Node:
     @property
     def send_mode(self):
         return self.network.send_mode
+    def clock(self):
+        return self.network.clock
 
     @property
     def links(self):
@@ -130,7 +117,7 @@ class Node:
             self.network.end_packet(packet)
         else:
             # enter queue and wait for being deliveried.
-            packet.start_queue = self.clock.t
+            packet.start_queue = self.clock
             self.queue.append(packet)
             self.agent.receive(self.ID, packet.dest) # for some algorithms need to know a packet received.
 
@@ -144,7 +131,7 @@ class Node:
         self.sent[action] += 1
         p.trans_time = self.network.transtime  # set the transmission delay
         heappush(self.network.event_queue,
-                 Event(p, self.ID, action, self.clock.t+p.trans_time))
+                 Event(p, self.ID, action, self.clock + p.trans_time))
 
     def send(self):
         """ Send a packet in queue order.
@@ -217,13 +204,13 @@ class Network:
         is_drop (bool): whether the network drop packet on some condition (the packet hops overpass number of all nodes)
 
     Attributes:
-        clock (Clock): The simulation time.
+        clock (int): The simulation time.
         nodes (Dict[Int, Node]): An ordered dictionary of all nodes in this network.
         links (Dict[Int, List[Int]]): lists of connected nodes' ID.
-        agent (:obj:): bind an agent, which follows class `Policy`
+        agent (Policy): bind an agent, which follows class `Policy`
         mode (string): Network mode,
-            None -> Default mode, 'dual' -> Duality mode
-        event_queue (List[Event]): A queue of following happen events.
+            None -> Default mode, 'dual' -> Duality, 'bp' -> BackPressure
+        event_queue (heap): A queue of following happen events.
         all_packets (int): The total number of packets in this simulation.
         end_packets (int): The packets already ends in its destination.
         drop_packets (int): The number of dropped packets
@@ -253,7 +240,7 @@ class Network:
 
     def clean(self):
         """ reset the network attributes """
-        self.clock = Clock(0)
+        self.clock = 0
         self.event_queue = []
         self.all_packets = 0
         self.end_packets = 0
@@ -262,7 +249,6 @@ class Network:
         self.hops = 0
         self.route_time = 0
         for node in self.nodes.values():
-            node.clock = self.clock
             node.queue = []
             for neighbor in node.sent:
                 node.sent[neighbor] = 0
