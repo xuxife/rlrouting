@@ -426,31 +426,36 @@ class Network:
 def print6x6(network):
     print("Time: {}".format(network.clock))
     for i in range(6):
-        print("┌─────┐     "*6)
+        print("┌─────┐     " * 6)
         for j in range(5):
-            print("│No.{:2d}│".format(6*i+j), end="")
-            if 6*i+j+1 in network.links[6*i+j]:
-                print(" {:2d}├ ".format(
-                    network.nodes[6*i+j].sent[6*i+j+1]), end="")
+            print("│No.{:2d}│".format(6 * i + j), end="")
+            if 6 * i + j + 1 in network.links[6 * i + j]:
+                print(" {:2d}├ ".format(network.nodes[6 * i + j].sent[6 * i +
+                                                                      j + 1]),
+                      end="")
             else:
-                print(" "*5, end="")
-        print("│No.{:2d}│".format(6*i+5))
+                print(" " * 5, end="")
+        print("│No.{:2d}│".format(6 * i + 5))
         for j in range(5):
-            print("│{:5d}│".format(len(network.nodes[6*i+j].queue)), end="")
-            if 6*i+j in network.links[6*i+j+1]:
-                print(" ┤{:<2d} ".format(
-                    network.nodes[6*i+j+1].sent[6*i+j]), end="")
+            print("│{:5d}│".format(len(network.nodes[6 * i + j].queue)),
+                  end="")
+            if 6 * i + j in network.links[6 * i + j + 1]:
+                print(" ┤{:<2d} ".format(network.nodes[6 * i + j +
+                                                       1].sent[6 * i + j]),
+                      end="")
             else:
-                print(" "*5, end="")
-        print("│{:5d}│".format(len(network.nodes[6*i+5].queue)))
-        print("└─────┘     "*6)
+                print(" " * 5, end="")
+        print("│{:5d}│".format(len(network.nodes[6 * i + 5].queue)))
+        print("└─────┘     " * 6)
         if i == 5:
-            print("="*6)
+            print("=" * 6)
             break
         for j in range(6):
-            if 6*i+j in network.links[6*i+j+6]:
+            if 6 * i + j in network.links[6 * i + j + 6]:
                 print("{:2d}┴ ┬{:<2d}     ".format(
-                    network.nodes[6*i+j+6].sent[6*i+j], network.nodes[6*i+j].sent[6*i+j+6]), end="")
+                    network.nodes[6 * i + j + 6].sent[6 * i + j],
+                    network.nodes[6 * i + j].sent[6 * i + j + 6]),
+                      end="")
             else:
-                print(" "*12, end="")
+                print(" " * 12, end="")
         print()
