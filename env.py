@@ -176,7 +176,6 @@ class Network:
         bandwidth (int): the bandwidth limitation of a connection/the maximum number of transmitting packets simultaneously
         transtime (int, float): the time delay of transmitting a packet to next node
         is_drop (bool): whether the network drop packet on some condition (the packet hops overpass number of all nodes)
-        read_func (function): a specific function reads a network file into self.nodes & self.links
 
     Attributes:
         clock (Clock): The simulation time.
@@ -194,7 +193,7 @@ class Network:
         route_time (int): The total routing time of all ended packets.
     """
 
-    def __init__(self, file, bandwidth=3, transtime=1, is_drop=False, read_func=None):
+    def __init__(self, file, bandwidth=3, transtime=1, is_drop=False):
         self.bandwidth = bandwidth
         self.transtime = transtime
         self.nodes = OrderedDict()
@@ -203,10 +202,7 @@ class Network:
         self.is_drop = is_drop
         self.clock = Clock(0)
 
-        if read_func is None:
-            self.read_network(file)
-        else:
-            read_func(self, file)
+        self.read_network(file)
 
         self.clean()
 
