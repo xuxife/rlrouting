@@ -57,7 +57,7 @@ class Reward:
         dest   (int): Where the packet finally ends (destination).
         action (int): the action taken by the `source` node (which neighbor to send to).
         packet (Packet): the corresponding packet.
-        agent_info (:obj:): Extra information from agent.get_info
+        agent_info (Dict): Extra information from agent.get_info
     """
     def __init__(self, source, packet, action, agent_info={}):
         self.source = source
@@ -86,15 +86,15 @@ class Node:
         self.set_mode(None)
 
     def set_mode(self, mode):
-        if mode is None:
-            self.send = self._send_default
-            self._build_info = self._build_info_default
-        elif mode == 'bp':
+        if mode == 'bp':
             self.send = self._send_bp
             self._build_info = self._build_info_default
         elif mode == 'dual':
             self.send = self._send_default
             self._build_info = self._build_info_dual
+        else:
+            self.send = self._send_default
+            self._build_info = self._build_info_default
 
     def reset(self):
         self.queue = []  # Priority Queue
@@ -184,6 +184,8 @@ class Node:
                 agent_info = self.agent.get_info(self.ID, action, p)
                 agent_info = self._build_info(agent_info, p, action)
                 rewards.append(Reward(self.ID, p, action, agent_info))
+                # Remove/comment the next line if Multiple Packages Need to be Sent at once
+                return rewards # only one packet can be sent
             else:
                 i += 1
         return rewards
